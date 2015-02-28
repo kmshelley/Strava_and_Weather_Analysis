@@ -37,8 +37,9 @@ def fetch_store_segment_and_leaderboards():
     leaderboard_collection = db['leaderboards']
 
     for segment in explore_segments():
-        logger.info('Fetching segment: {0}'.format(segment["id"]))
-        res = requests.get(config.STRAVA_API_SEGMENT_URI % segment["id"], headers=config.STRAVA_API_HEADER)
+        segment_id = segment["id"]
+        logger.info('Fetching segment: {0}'.format(segment_id))
+        res = requests.get(config.STRAVA_API_SEGMENT_URI % segment_id, headers=config.STRAVA_API_HEADER)
 
         _id = None
         try:
@@ -47,11 +48,11 @@ def fetch_store_segment_and_leaderboards():
         except pymongo.errors.DuplicateKeyError as dk:
             logger.info("### Exception inserting segment: %s", dk)
             #Get Segment ID from DB
-            _id = segments_collection.find_one({'id': segment["id"]})["_id"]
+            _id = segments_collection.find_one({'id': segment_id})["_id"]
             # This segment has already been processed earlier
             #continue
 
-        logger.info(_id)
+        logger.info("DB Unique Key %s", _id)
 
         num_athletes = res.json()['athlete_count']
         logger.info('Athlete Count: {0}'.format(num_athletes))
@@ -61,14 +62,14 @@ def fetch_store_segment_and_leaderboards():
 
         while page_num < 2 + num_athletes / config.STRAVA_PAGE_LIMIT:
             leaderboard_batch = []
-            logger.info("[Segment:{0}] Fetching Leader-board Page: {1}".format(segment["id"], page_num))
+            logger.info("[Segment:{0}] Fetching Leader-board Page: {1}".format(segment_id, page_num))
 
 
-            res = requests.get(config.STRAVA_API_SEGMENT_LEADERBOARD_URI % segment["id"],
+            res = requests.get(config.STRAVA_API_SEGMENT_LEADERBOARD_URI % segment_id,
                                headers=config.STRAVA_API_HEADER,
                                params={'per_page': config.STRAVA_PAGE_LIMIT, 'page': page_num})
             '''
-            res = requests.get(config.STRAVA_API_SEGMENT_ALL_EFFORTS_URI % segment["id"],
+            res = requests.get(config.STRAVA_API_SEGMENT_ALL_EFFORTS_URI % segment_id,
                                headers=config.STRAVA_API_HEADER)
             '''
 
@@ -99,7 +100,8 @@ def fetch_store_segment_and_leaderboards():
                 #Insert Efforts Batch into MongoDB
                 ids = leaderboard_collection.insert(leaderboard_batch)
                 #print(ids)
-                logger.info("[Segment:%s] Total Number of Leaderboard entries inserted into Mongo is %d", segment["id"], entry_num)
+                logger.info("[Segment:%s][Total:%d] Total Number of Leaderboard entries inserted into Mongo is %d",
+                                            segment_id, num_athletes, entry_num)
             except pymongo.errors.DuplicateKeyError as dk:
                 logger.info("### Exception inserting leaderboard: %s", dk)
 
