@@ -1,12 +1,16 @@
-import time
-import pprint
-
+import config
+import os
+import sys
 import requests
+import datetime
+import time
+import json
+import urllib
+import urllib2
+import StringIO
+import pprint
 import pymongo
 from pymongo import MongoClient
-
-from W205_Final_Project.strava.acquire import config
-
 
 # MongoDB Client & DB
 client = MongoClient('mongodb://localhost:27017/')
@@ -25,9 +29,9 @@ def explore_segments():
         yield segment
 
 
-def fetch_store_segment_and_efforts():
+def fetch_store_segment_and_leaderboards():
     segments_collection = db['segments']
-    efforts_collection = db['efforts']
+    leaderboard_collection = db['leaderboards']
 
     for segment in explore_segments():
         print('Fetching segment: {0}'.format(segment["id"]))
@@ -46,17 +50,17 @@ def fetch_store_segment_and_efforts():
 
         print(_id)
 
-        num_efforts = res.json()['effort_count']
-        print('Effort Count: {0}'.format(num_efforts))
+        num_athletes = res.json()['athlete_count']
+        print('Athlete Count: {0}'.format(num_athletes))
 
         page_num = 1
 
-        while page_num < 2 + num_efforts / config.STRAVA_PAGE_LIMIT:
-            efforts_batch = []
-            print("Effort Request for Page: ", page_num)
+        while page_num < 2 + num_athletes / config.STRAVA_PAGE_LIMIT:
+            leaderboard_batch = []
+            print("Leader-board Request for Page: ", page_num)
 
 
-            res = requests.get(config.STRAVA_API_SEGMENT_ALL_EFFORTS_URI % segment["id"],
+            res = requests.get(config.STRAVA_API_SEGMENT_LEADERBOARD_URI % segment["id"],
                                headers=config.STRAVA_API_HEADER,
                                params={'per_page': config.STRAVA_PAGE_LIMIT, 'page': page_num})
             '''
@@ -83,19 +87,19 @@ def fetch_store_segment_and_efforts():
 
             for effort in res.json():
                 effort["_segment_id"] = _id
-                efforts_batch.append(effort)
+                leaderboard_batch.append(effort)
                 #pprint.pprint(effort)
 
             try:
                 #Insert Efforts Batch into MongoDB
-                ids = efforts_collection.insert(efforts_batch)
+                ids = leaderboard_collection.insert(leaderboard_batch)
                 print(ids)
             except pymongo.errors.DuplicateKeyError as dk:
-                print("### Exception inserting effort: ", dk)
+                print("### Exception inserting leaderboard: ", dk)
 
 
 if __name__ == '__main__':
-    fetch_store_segment_and_efforts()
+    fetch_store_segment_and_leaderboards()
 
 
 

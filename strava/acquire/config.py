@@ -1,4 +1,4 @@
-STRAVA_ACCESS_TOKEN = ""
+STRAVA_ACCESS_TOKEN = "c0357e6de855af36dc5e5b89219613fd04eff3a1"
 STRAVA_API_URI = "https://www.strava.com/api/v3/"
 STRAVA_API_HEADER = {"Authorization": "Bearer %s" % STRAVA_ACCESS_TOKEN}
 
