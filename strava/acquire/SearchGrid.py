@@ -120,6 +120,17 @@ class SearchGrid():
             lat,lng = lat_lon_from_point_and_bearing(lat,lng,self.diagonal_bearing - 45, self.resolution) #move starting point og grid walk <resolution> meters north
             lat1,lng1 = lat,lng #reset lat1, lng1
 
+    def define_strava_params(self):
+        walk = self.grid_walk()
+        PARAMS = {}
+        try:
+            while True:
+                points = walk.next()
+                PARAMS = {"bounds": str(points['sw.lat']) + "," + str(points['sw.lng']) + "," + str(points['ne.lat']) + "," + str(points['ne.lng'])}
+                yield PARAMS
+        except StopIteration:
+            pass
+
     def print_grid(self):
         #prints the grid walk
         walk = self.grid_walk()
@@ -153,12 +164,6 @@ class SearchGrid():
         except StopIteration:
             pass
         kml.save(os.getcwd() + "\\grid_" + str(self.zipCode) + "_" + str(self.resolution) + "_meters.kml")
-
-
-grid = SearchGrid(95051,5000)
-grid.bounding_box_kml()
-grid.grid_kml()
-
 
 
 

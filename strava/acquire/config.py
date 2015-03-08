@@ -1,4 +1,4 @@
-STRAVA_ACCESS_TOKEN = "c0357e6de855af36dc5e5b89219613fd04eff3a1"
+STRAVA_ACCESS_TOKEN = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
 STRAVA_API_URI = "https://www.strava.com/api/v3/"
 STRAVA_API_HEADER = {"Authorization": "Bearer %s" % STRAVA_ACCESS_TOKEN}
 
@@ -10,4 +10,5 @@ STRAVA_API_SEGMENT_EXPLORE_URI = STRAVA_API_URI + "segments/explore"
 STRAVA_PAGE_LIMIT = 200
 
 segment_ids = [646257]
-zipcode = [94568]
+zipcode = [95051,95050]
+mesh = 50000 #search grid square width in meters
