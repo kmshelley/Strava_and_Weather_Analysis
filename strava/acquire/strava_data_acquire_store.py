@@ -15,9 +15,6 @@ from pymongo import MongoClient
 from ..util import log
 from SearchGrid import SearchGrid
 
-sys.path.append('C:\\Users\\Katherine\\Documents\\GitHub\\W205\\W205_Final_Project\\strava\\acquire')
-sys.path.append('C:\\Users\\Katherine\\Documents\\GitHub\\W205\\W205_Final_Project\\strava\\report')
-
 logger = log.getLogger(__name__)
 
 # MongoDB Client & DB
