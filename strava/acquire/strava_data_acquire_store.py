@@ -104,7 +104,8 @@ def fetch_store_segment_and_leaderboards():
                     for entry in res.json()['entries']:
                         #pprint.pprint(entry)
                         entry_num += 1
-                        entry["_segment_id"] = _id
+                        entry["_segment_id"] = segment_id #try using strava segment id instead of MongoDB id
+                        #entry["_segment_id"] = _id #this is inserting as 'null' in MongoDB
                         leaderboard_batch.append(entry)
                     #if len(leaderboard_batch) == 0:
                     #    print "Empty leaderboard!"
