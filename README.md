@@ -20,3 +20,9 @@ Katherine Shelley
 3. Added testing/debugging code I have been using. It has some initial viz code snippets we may want to use later.
 
 
+3/28/2015:
+Katherine Shelley
+1. Updated config.py; added dictionary with state abbreviations. I noticed that some Strava segments use abbreviations, others use full state name.
+2. Updated weather_acquire.py with Mongo bulk insert operations, seems to have reduced time significantly (5 min per month vs. 15 min per month).
+3. Added get_zip_codes.py, which develops a MongoDB collection of zip code data including state, county, zip code, and bounding box.
+4. Included zip_code_database.csv downloaded from USPS.
