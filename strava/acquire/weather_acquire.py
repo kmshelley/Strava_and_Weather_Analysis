@@ -20,8 +20,6 @@ import datetime as dt
 client = MongoClient('mongodb://localhost:27017/')
 db = client['noaa_weather']
 
-tempDrive = 'C:\Temp'
-
 def acquire_metar_records(url,filename,id_list=None):
     hourly_coll = db['hourly_records']
 
@@ -48,7 +46,7 @@ def acquire_metar_records(url,filename,id_list=None):
         z.close()
         os.remove(outFilePath)
     except Exception as e:
-        print "Unknown Exception: " + str(e)
+        print "####ERROR: " + str(e)
 
 def acquire_WBAN_definitions(url):
     wban_coll = db['WBAN']
@@ -70,7 +68,7 @@ def acquire_WBAN_definitions(url):
         z.close()
         os.remove(outFilePath)
     except Exception as e:
-        print "Unknown Exception: " + e
+        print "####ERROR: " + str(e)
 
 
 
