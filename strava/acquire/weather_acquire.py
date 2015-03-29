@@ -56,7 +56,7 @@ def acquire_WBAN_definitions(url):
 
     zip_file = url.split('/')[-1]
     outFilePath = zip_file
-    unzip_file = zip_file.split('.')[0]
+    unzip_file = zip_file[:-4]
     try:
         urllib.urlretrieve(url,outFilePath)
 
