@@ -1,85 +1,34 @@
 #lat/lon grid class
-import math, os, json, urllib, urllib2, StringIO, simplekml
+#import lat_lng
+from ..util import lat_lng
+import math, os, simplekml
 earthRad = 40075000/2*math.pi #radius of earth in meters
-
-########################### Google Maps Address Search ################################
-def get_address_coordinates(address):
-    #print address
-    #define Google Maps API URL parameters
-    urlparams = {
-        'address': address,
-        'sensor': 'false',
-    }
-    url = 'http://maps.google.com/maps/api/geocode/json?' + urllib.urlencode(urlparams)
-    #print url
-    response = urllib2.urlopen(url)
-    responsebody = response.read()
-
-    body = StringIO.StringIO(responsebody)
-    #print body
-    result = json.load(body) #load the JSON data into a dictionary
-
-    if 'status' not in result or result['status'] != 'OK':
-        return None
-    else:
-        return {
-            'sw.lat': result['results'][0]['geometry']['bounds']['southwest']['lat'],
-            'sw.lng': result['results'][0]['geometry']['bounds']['southwest']['lng'],
-            'ne.lat': result['results'][0]['geometry']['bounds']['northeast']['lat'],
-            'ne.lng': result['results'][0]['geometry']['bounds']['northeast']['lng']
-        }
-
-############################ Lat/Lon formulas ########################################
-def dist_lat_lon(latCoord1, lonCoord1, latCoord2, lonCoord2):
-    # Distance between two points, (lat1,lon1) and (lat2,lon2)
-    distance = 0 #reset the distance calculation
-    latRad1 = math.radians(latCoord1) #convert the first latitude to radians
-    lonRad1 = math.radians(lonCoord1) #convert the first longitude to radians
-    latRad2 = math.radians(latCoord2) #convert the second latitude to radians
-    lonRad2 = math.radians(lonCoord2) #convert the second longitude to radians
-    distance = earthRad * math.atan2(math.sqrt((math.cos(latRad2)*math.sin(lonRad1 - lonRad2))**2+(math.cos(latRad1)*math.sin(latRad2)-math.sin(latRad1)*math.cos(latRad2)*math.cos(lonRad1-lonRad2))**2),(math.sin(latRad2)*math .sin(latRad1)+math.cos(latRad1)*math.cos(latRad2)*math.cos(lonRad1-lonRad2)))
-    return distance
-
-def lat_lon_from_point_and_bearing(lat,lon,angle,dist):
-    #returns a lat/lon pair that is dist NM from given lat/lon at the given angle bearing
-    lat2  = math.degrees(math.asin(math.sin(math.radians(lat))*math.cos(dist/earthRad) + math.cos(math.radians(lat))*math.sin(dist/earthRad)*math.cos(math.radians(angle))))
-    lon2 = lon + math.degrees(math.atan2(math.sin(math.radians(angle))*math.sin(dist/earthRad)*math.cos(math.radians(lat)),math.cos(dist/earthRad) - math.sin(math.radians(lat))*math.sin(math.radians(lat2))))
-    return lat2, lon2
-
-def bearing_from_two_lat_lons(lat1,lon1,lat2,lon2):
-    x = math.sin(math.radians(lon2)-math.radians(lon1))*math.cos(math.radians(lat2))
-    y = math.cos(math.radians(lat1))*math.sin(math.radians(lat2)) - math.sin(math.radians(lat1))*math.cos(math.radians(lat2))*math.cos(math.radians(lon2)-math.radians(lon1))
-    return (math.degrees(math.atan2(x,y))+360)%360
-
-def find_midpoint_between_lat_lons(lat1,lon1,lat2,lon2):
-    return lat_lon_from_point_and_bearing(lat1,lon1,bearing_from_two_lat_lons(lat1,lon1,lat2,lon2),dist_lat_lon(lat1,lon1,lat2,lon2)/2)
-########################################################################################
-
 
 class SearchGrid():
     #defines the address search grid
-    def __init__(self,zipCode=00000,resolution=5000):
-        self.zipCode = zipCode
+    def __init__(self,bbox=[0,0,0,0],resolution=5000):
+        #self.zipCode = zipCode
         self.resolution = resolution #resolution of the grid squares (in meters)
-        self.googleBB = get_address_coordinates(zipCode) #Google Maps API returned bounding coordinates of zip code
+        self.bbox = {'sw.lat': bbox[1],'sw.lng':bbox[0],'ne.lat':bbox[3],'ne.lng':bbox[2]}#bounding box
+        #self.googleBB = get_address_coordinates(zipCode) #Google Maps API returned bounding coordinates of zip code
         #characteristics of the grid
-        self.diagonal_dist = dist_lat_lon(self.googleBB['sw.lat'],self.googleBB['sw.lng'],self.googleBB['ne.lat'],self.googleBB['ne.lng']) #distance of diagonal between bounding coordinates
-        self.diagonal_bearing = bearing_from_two_lat_lons(self.googleBB['sw.lat'],self.googleBB['sw.lng'],self.googleBB['ne.lat'],self.googleBB['ne.lng']) #bearing between bounding coordinates
+        self.diagonal_dist = lat_lng.dist_lat_lon(self.bbox['sw.lat'],self.bbox['sw.lng'],self.bbox['ne.lat'],self.bbox['ne.lng']) #distance of diagonal between bounding coordinates
+        self.diagonal_bearing = lat_lng.bearing_from_two_lat_lons(self.bbox['sw.lat'],self.bbox['sw.lng'],self.bbox['ne.lat'],self.bbox['ne.lng']) #bearing between bounding coordinates
         self.side_length = math.sqrt((self.diagonal_dist**2)/2) #width of bounding box (KM)
         #other bounding points of the box
-        nw_lat,nw_lng = lat_lon_from_point_and_bearing(self.googleBB['sw.lat'],self.googleBB['sw.lng'],self.diagonal_bearing - 45,self.side_length)
-        se_lat,se_lng = lat_lon_from_point_and_bearing(self.googleBB['sw.lat'],self.googleBB['sw.lng'],self.diagonal_bearing + 45,self.side_length)
+        nw_lat,nw_lng = lat_lng.lat_lon_from_point_and_bearing(self.bbox['sw.lat'],self.bbox['sw.lng'],self.diagonal_bearing - 45,self.side_length)
+        se_lat,se_lng = lat_lng.lat_lon_from_point_and_bearing(self.bbox['sw.lat'],self.bbox['sw.lng'],self.diagonal_bearing + 45,self.side_length)
 
         #dictionary defining the points of the entire bounding box
         self.bounding_box = {
-            'sw.lat': self.googleBB['sw.lat'],
-            'sw.lng': self.googleBB['sw.lng'],
+            'sw.lat': self.bbox['sw.lat'],
+            'sw.lng': self.bbox['sw.lng'],
             'se.lat': se_lat,
             'se.lng': se_lng,
             'nw.lat': nw_lat,
             'nw.lng': nw_lng,
-            'ne.lat': self.googleBB['ne.lat'],
-            'ne.lng': self.googleBB['ne.lng']
+            'ne.lat': self.bbox['ne.lat'],
+            'ne.lng': self.bbox['ne.lng']
             }
 
     def bounding_box_kml(self):
@@ -94,7 +43,7 @@ class SearchGrid():
                 ]
         kml.newlinestring(name='bouding_box', description='bounding box',
                                 coords=coords)
-        kml.save(os.getcwd() + "\\bb_" + str(self.zipCode) + ".kml")
+        kml.save(os.getcwd() + "\\bb.kml")
 
     def grid_walk(self):
         #generator function for grid points
@@ -105,8 +54,8 @@ class SearchGrid():
         lat1,lng1 = lat,lng #sw point of grid square
         for i in range(steps):
             for j in range(steps):
-                lat2,lng2 = lat_lon_from_point_and_bearing(lat1,lng1,self.diagonal_bearing, math.sqrt(2 * self.resolution**2)) #ne point of grid square
-                center_lat,center_lng = lat_lon_from_point_and_bearing(lat1,lng1,self.diagonal_bearing, math.sqrt(2 * self.resolution**2)/2) #center point of grid square
+                lat2,lng2 = lat_lng.lat_lon_from_point_and_bearing(lat1,lng1,self.diagonal_bearing, math.sqrt(2 * self.resolution**2)) #ne point of grid square
+                center_lat,center_lng = lat_lng.lat_lon_from_point_and_bearing(lat1,lng1,self.diagonal_bearing, math.sqrt(2 * self.resolution**2)/2) #center point of grid square
                 grid_square = {
                     'sw.lat': lat1,
                     'sw.lng': lng1,
@@ -116,8 +65,8 @@ class SearchGrid():
                     'center.lng': center_lng
                     }
                 yield grid_square
-                lat1,lng1 = lat_lon_from_point_and_bearing(lat1,lng1,self.diagonal_bearing + 45, self.resolution) #move <resolution> meters to the east
-            lat,lng = lat_lon_from_point_and_bearing(lat,lng,self.diagonal_bearing - 45, self.resolution) #move starting point og grid walk <resolution> meters north
+                lat1,lng1 = lat_lng.lat_lon_from_point_and_bearing(lat1,lng1,self.diagonal_bearing + 45, self.resolution) #move <resolution> meters to the east
+            lat,lng = lat_lng.lat_lon_from_point_and_bearing(lat,lng,self.diagonal_bearing - 45, self.resolution) #move starting point og grid walk <resolution> meters north
             lat1,lng1 = lat,lng #reset lat1, lng1
 
     def define_strava_params(self):
