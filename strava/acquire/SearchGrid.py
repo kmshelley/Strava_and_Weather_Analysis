@@ -1,16 +1,13 @@
 #lat/lon grid class
-#import lat_lng
 from ..util import lat_lng
 import math, os, simplekml
-earthRad = 40075000/2*math.pi #radius of earth in meters
 
 class SearchGrid():
     #defines the address search grid
-    def __init__(self,bbox=[0,0,0,0],resolution=5000):
-        #self.zipCode = zipCode
-        self.resolution = resolution #resolution of the grid squares (in meters)
+    def __init__(self,bbox=[0,0,0,0],width=1):
+        self.width = width #number of grid squares per row (grid is width X width)
         self.bbox = {'sw.lat': bbox[1],'sw.lng':bbox[0],'ne.lat':bbox[3],'ne.lng':bbox[2]}#bounding box
-        #self.googleBB = get_address_coordinates(zipCode) #Google Maps API returned bounding coordinates of zip code
+
         #characteristics of the grid
         self.diagonal_dist = lat_lng.dist_lat_lon(self.bbox['sw.lat'],self.bbox['sw.lng'],self.bbox['ne.lat'],self.bbox['ne.lng']) #distance of diagonal between bounding coordinates
         self.diagonal_bearing = lat_lng.bearing_from_two_lat_lons(self.bbox['sw.lat'],self.bbox['sw.lng'],self.bbox['ne.lat'],self.bbox['ne.lng']) #bearing between bounding coordinates
@@ -43,19 +40,19 @@ class SearchGrid():
                 ]
         kml.newlinestring(name='bouding_box', description='bounding box',
                                 coords=coords)
-        kml.save(os.getcwd() + "\\bb.kml")
+        kml.save(os.path.join(os.getcwd(),'bb.kml'))
 
     def grid_walk(self):
         #generator function for grid points
         #need to make more robust for crossing hemispheres
-        steps = int(self.side_length/self.resolution) + 1 #number of grid squares per side (+ 1 provides a little overlap for completeness)
+        grid_length = int(self.side_length/self.width) #width of grid square
 
         lat,lng = self.bounding_box['sw.lat'],self.bounding_box['sw.lng'] #start the walk at the southwest corner
         lat1,lng1 = lat,lng #sw point of grid square
-        for i in range(steps):
-            for j in range(steps):
-                lat2,lng2 = lat_lng.lat_lon_from_point_and_bearing(lat1,lng1,self.diagonal_bearing, math.sqrt(2 * self.resolution**2)) #ne point of grid square
-                center_lat,center_lng = lat_lng.lat_lon_from_point_and_bearing(lat1,lng1,self.diagonal_bearing, math.sqrt(2 * self.resolution**2)/2) #center point of grid square
+        for i in range(self.width):
+            for j in range(self.width):
+                lat2,lng2 = lat_lng.lat_lon_from_point_and_bearing(lat1,lng1,self.diagonal_bearing, math.sqrt(2 * grid_length**2)) #ne point of grid square
+                center_lat,center_lng = lat_lng.lat_lon_from_point_and_bearing(lat1,lng1,self.diagonal_bearing, math.sqrt(2 * grid_length**2)/2) #center point of grid square
                 grid_square = {
                     'sw.lat': lat1,
                     'sw.lng': lng1,
@@ -65,8 +62,8 @@ class SearchGrid():
                     'center.lng': center_lng
                     }
                 yield grid_square
-                lat1,lng1 = lat_lng.lat_lon_from_point_and_bearing(lat1,lng1,self.diagonal_bearing + 45, self.resolution) #move <resolution> meters to the east
-            lat,lng = lat_lng.lat_lon_from_point_and_bearing(lat,lng,self.diagonal_bearing - 45, self.resolution) #move starting point og grid walk <resolution> meters north
+                lat1,lng1 = lat_lng.lat_lon_from_point_and_bearing(lat1,lng1,self.diagonal_bearing + 45, grid_length) #move <grid_length> meters to the east
+            lat,lng = lat_lng.lat_lon_from_point_and_bearing(lat,lng,self.diagonal_bearing - 45, grid_length) #move starting point og grid walk <grid_length> meters north
             lat1,lng1 = lat,lng #reset lat1, lng1
 
     def define_strava_params(self):
@@ -89,7 +86,7 @@ class SearchGrid():
         except StopIteration:
             pass
 
-    def grid_kml(self):
+    def grid_kml(self,filename='grid.kml'):
         #creates a Google Earth KML file of the grid points
         walk = self.grid_walk()
         kml = simplekml.Kml()
@@ -112,7 +109,5 @@ class SearchGrid():
                 pnt.style.iconstyle.icon.href = 'http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png'
         except StopIteration:
             pass
-        kml.save(os.getcwd() + "\\grid_" + str(self.zipCode) + "_" + str(self.resolution) + "_meters.kml")
-
-
+        kml.save(os.path.join(os.getcwd(),filename))
 
