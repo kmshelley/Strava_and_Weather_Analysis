@@ -20,17 +20,23 @@ import config
 import datetime as dt
 import csv
 import pprint
+from ..util import log
+from ..util.config import Config
 
 # MongoDB Client & DB for storing zip code data
-client = MongoClient('mongodb://localhost:27017/')
-db = client['zip_codes']
-zip_data_coll = db['zip_data_coll']
+# MongoDB Client & DB
+config = Config()
+client = MongoClient(config.get("mongo", "uri"))
+db = client[config.get("mongo", "db_strava")]
+zip_data_coll = db[config.get("mongo", "coll_zip")]
 
 
 def import_zip_code_database(csvFile):
     #loads zip code database information from downloaded csv file
     print"Inserting/updating zip code database fron CSV file...\n"
-    bulk = db.zip_data_coll.initialize_ordered_bulk_op()
+    bulk = zip_data_coll.initialize_ordered_bulk_op()
+    csvFile = os.path.join(os.path.dirname(os.path.realpath(__file__)), csvFile)
+    print("CSV File: ", csvFile)
     with open(csvFile,'r') as zipcodes:
         csv_dict = csv.DictReader(zipcodes)
         for row in csv_dict:
