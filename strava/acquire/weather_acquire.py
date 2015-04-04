@@ -14,11 +14,13 @@ import csv
 import pprint
 from pymongo import MongoClient
 import datetime as dt
+from ..util.config import Config
 
+config = Config()
 
 # MongoDB Client & DB
-client = MongoClient('mongodb://localhost:27017/')
-db = client['noaa_weather']
+client = MongoClient(config.get("mongo", "uri"))
+db = client[config.get("mongo", "db_strava")]
 
 def acquire_metar_records(url,filename,id_list=None):
     hourly_coll = db['hourly_records']
