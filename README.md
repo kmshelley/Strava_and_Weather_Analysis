@@ -26,3 +26,8 @@ Katherine Shelley
 2. Updated weather_acquire.py with Mongo bulk insert operations, seems to have reduced time significantly (5 min per month vs. 15 min per month).
 3. Added get_zip_codes.py, which develops a MongoDB collection of zip code data including state, county, zip code, and bounding box.
 4. Included zip_code_database.csv downloaded from USPS.
+
+4/4/2015:
+Katherine
+1. Changes SearchGrid.py to take bounding box coords instead of zip code.
+2. Added lat_lng.py to contain all lat/long functions for easy access for all scripts.
