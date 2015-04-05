@@ -49,8 +49,14 @@ def explore_segments(parameters):
 def get_zip():
     logger.info("Calling generator for zip codes which start with 9 [CA]")
     regx = re.compile("^9.*")
-    for z in zip_data_collection.find({"zip": regx}):
-        yield z["zip"]
+    zip_cursor = zip_data_collection.find({"zip": regx})
+    # Store the cursor into a list to avoid timeouts by keeping the cursor open for a long time
+    zip_list = []
+    for z in zip_cursor:
+        zip_list.append(z["zip"])
+    for z in zip_list:
+        yield z
+
 
 
 
@@ -203,4 +209,6 @@ def fetch_store_segment_and_leaderboards():
 
 if __name__ == '__main__':
     """Test"""
-    get_zip()
+    logger.info("Invoking Main...")
+    for z in get_zip():
+        print(z)
