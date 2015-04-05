@@ -59,7 +59,8 @@ def fetch_store_segment_and_leaderboards():
     for zipcode in get_zip():
         #generate a search grid for the zip code
         bbox = zip_data_collection.find_one({'zip': str(zipcode)})['bbox']
-        bbox = ast.literal_eval(bbox)
+        if bbox and bbox is not None:
+            bbox = ast.literal_eval(bbox)
         #logger.info("Bounding Box: " + str(bbox))
         grid = SearchGrid(bbox)
         for parameters in grid.define_strava_params():
