@@ -31,8 +31,9 @@ zip_data_collection = db[cfg.get("mongo", "coll_zip")]
 
 #PARAMS = {"bounds": "37.695010" + "," + "-122.510605" + "," + "37.815531" + "," + "-122.406578"}
 
-# Following segments were excluded due to Exceptions during Data Collection
+# Following zips/segments were excluded due to Exceptions during Data Collection
 missed_segments = []
+missed_zips = []
 
 
 def explore_segments(parameters):
@@ -63,124 +64,137 @@ def fetch_store_segment_and_leaderboards():
     #KMS: Iterate through the zip codes, compiling leaderboard and segment data
     for zipcode in get_zip():
 
-        #generate a search grid for the zip code
-        bbox = zip_data_collection.find_one({'zip': str(zipcode)})['bbox']
-        if bbox and bbox is not None:
-            bbox = ast.literal_eval(bbox)
-        else:
-            logger.info("Bounding Box: {0}".format(bbox))
-            bbox = [0, 0, 0, 0]
+        try:
+            #generate a search grid for the zip code
+            bbox = zip_data_collection.find_one({'zip': str(zipcode)})['bbox']
+            if bbox and bbox is not None:
+                bbox = ast.literal_eval(bbox)
+            else:
+                logger.info("Bounding Box: {0}".format(bbox))
+                bbox = [0, 0, 0, 0]
 
-        #logger.info("Bounding Box: " + str(bbox))
-        grid = SearchGrid(bbox)
-        for parameters in grid.define_strava_params():
-            for segment in explore_segments(parameters):
-                segment_id = segment["id"]
-                logger.info('ZIP [{0}] Fetching segment: {1}'.format(zipcode, segment_id))
-                res = requests.get(config.STRAVA_API_SEGMENT_URI % segment_id, headers=config.STRAVA_API_HEADER)
-
-                try:
-                    if res.status_code != 200 or "errors" in res.json():
-                        pprint.pprint(res.json())
-                        time.sleep(60)
-                        missed_segments.append(segment_id)
-                        continue
-                except Exception as e:
-                    logger.exception("### Exception fetching segments: %s", segment_id)
-                    time.sleep(60*5)
-                    missed_segments.append(segment_id)
-                    continue
-
-                # MongoDB ID
-                _id = None
-                try:
-                    #Insert Segment into MongoDB
-                    _id = segments_collection.insert(res.json())
-                except pymongo.errors.DuplicateKeyError as dk:
-                    logger.exception("### Exception inserting segment: %s", dk)
-                    #Get Segment ID from DB
-                    _id = segments_collection.find_one({'id': segment_id})["_id"]
-                    # This segment has already been processed earlier
-                    #continue
-                except Exception as e:
-                    #any other exception
-                    logger.exception("### Exception inserting segment: %s", dk)
-                    missed_segments.append(segment_id)
-                    continue
-
-                logger.info("DB Unique Key %s", _id)
-
-                num_athletes = res.json()['athlete_count']
-                logger.info('Athlete Count: {0}'.format(num_athletes))
-
-                page_num = 1
-                entry_num = 0;
-
-                while page_num < 2 + num_athletes / config.STRAVA_PAGE_LIMIT:
-                    leaderboard_batch = []
-                    logger.info("[Segment:{0}] Fetching Leader-board Page: {1}".format(segment_id, page_num))
-
-
-                    res = requests.get(config.STRAVA_API_SEGMENT_LEADERBOARD_URI % segment_id,
-                                       headers=config.STRAVA_API_HEADER,
-                                       params={'per_page': config.STRAVA_PAGE_LIMIT, 'page': page_num})
-                    '''
-                    res = requests.get(config.STRAVA_API_SEGMENT_ALL_EFFORTS_URI % segment_id,
-                                       headers=config.STRAVA_API_HEADER)
-                    '''
-
-                    #pprint.pprint(res.json())
+            #logger.info("Bounding Box: " + str(bbox))
+            grid = SearchGrid(bbox)
+            for parameters in grid.define_strava_params():
+                for segment in explore_segments(parameters):
+                    segment_id = segment["id"]
+                    logger.info('ZIP [{0}] Fetching segment: {1}'.format(zipcode, segment_id))
+                    res = requests.get(config.STRAVA_API_SEGMENT_URI % segment_id, headers=config.STRAVA_API_HEADER)
 
                     try:
                         if res.status_code != 200 or "errors" in res.json():
                             pprint.pprint(res.json())
-                            logger.info("Sleeping after Requesting Retry for Page: ", page_num)
                             time.sleep(60)
+                            missed_segments.append(segment_id)
                             continue
                     except Exception as e:
-                        logger.exception("### Exception fetching Leaderboard Entries for Segment: %s", segment_id)
-                        logger.info("Sleeping after Exception for Page: %s", page_num)
+                        logger.exception("### Exception fetching segments: %s", segment_id)
                         time.sleep(60*5)
+                        missed_segments.append(segment_id)
                         continue
 
-                    page_num += 1
-
-                    # Initialize Bulk Op
-                    bulk = leaderboard_collection.initialize_unordered_bulk_op()
-
-                    for entry in res.json()['entries']:
-                        #pprint.pprint(entry)
-                        entry_num += 1
-                        entry["segment_id"] = segment_id  # try using strava segment id instead of MongoDB id
-                        entry["_segment_id"] = _id  # this is inserting as 'null' in MongoDB
-                        leaderboard_batch.append(entry)
-                        bulk.insert(entry)
-                    #if len(leaderboard_batch) == 0:
-                    #    print "Empty leaderboard!"
-
-                    ids = []
-
+                    # MongoDB ID
+                    _id = None
                     try:
-                        #ids = leaderboard_collection.insert(leaderboard_batch)
-                        #print(ids)
-
-                        #Insert Efforts Batch into MongoDB
-                        result = bulk.execute()
-                        print(result)
-                        logger.info("[Segment:%s][Total:%d] Total Number of Leaderboard Entries inserted into Mongo is %d",
-                                                    segment_id, num_athletes, entry_num)
-                    except BulkWriteError as bwe:
-                        logger.exception("### BulkWriteError inserting leaderboard: %s", bwe)
-                        pprint.pprint(bwe.details)
+                        #Insert Segment into MongoDB
+                        _id = segments_collection.insert(res.json())
                     except pymongo.errors.DuplicateKeyError as dk:
-                        logger.exception("### Exception inserting leaderboard: %s", dk)
-                        logger.info("[Segment:%s][Total:%d] Total Number of Leaderboard Entries inserted into Mongo is %d",
-                                                    segment_id, num_athletes, len(ids))
+                        logger.exception("### Exception inserting segment: %s", dk)
+                        #Get Segment ID from DB
+                        _id = segments_collection.find_one({'id': segment_id})["_id"]
+                        # This segment has already been processed earlier
+                        #continue
                     except Exception as e:
                         #any other exception
-                        logger.exception("### Exception inserting leaderboard: %s", dk)
-                        logger.info("[Segment:%s][Total:%d] Total Number of Leaderboard Entries inserted into Mongo is %d",
-                                                    segment_id, num_athletes, len(ids))
+                        logger.exception("### Exception inserting segment: %s", dk)
+                        missed_segments.append(segment_id)
+                        continue
+
+                    logger.info("DB Unique Key %s", _id)
+
+                    num_athletes = res.json()['athlete_count']
+                    logger.info('Athlete Count: {0}'.format(num_athletes))
+
+                    page_num = 1
+                    entry_num = 0;
+
+                    while page_num < 2 + num_athletes / config.STRAVA_PAGE_LIMIT:
+                        leaderboard_batch = []
+                        logger.info("[Segment:{0}] Fetching Leader-board Page: {1}".format(segment_id, page_num))
+
+
+                        res = requests.get(config.STRAVA_API_SEGMENT_LEADERBOARD_URI % segment_id,
+                                           headers=config.STRAVA_API_HEADER,
+                                           params={'per_page': config.STRAVA_PAGE_LIMIT, 'page': page_num})
+                        '''
+                        res = requests.get(config.STRAVA_API_SEGMENT_ALL_EFFORTS_URI % segment_id,
+                                           headers=config.STRAVA_API_HEADER)
+                        '''
+
+                        #pprint.pprint(res.json())
+
+                        try:
+                            if res.status_code != 200 or "errors" in res.json():
+                                pprint.pprint(res.json())
+                                logger.info("Sleeping after Requesting Retry for Page: ", page_num)
+                                time.sleep(60)
+                                continue
+                        except Exception as e:
+                            logger.exception("### Exception fetching Leaderboard Entries for Segment: %s", segment_id)
+                            logger.info("Sleeping after Exception for Page: %s", page_num)
+                            time.sleep(60*5)
+                            continue
+
+                        page_num += 1
+
+                        # Initialize Bulk Op
+                        bulk = leaderboard_collection.initialize_unordered_bulk_op()
+
+                        for entry in res.json()['entries']:
+                            #pprint.pprint(entry)
+                            entry_num += 1
+                            entry["segment_id"] = segment_id  # try using strava segment id instead of MongoDB id
+                            entry["_segment_id"] = _id  # this is inserting as 'null' in MongoDB
+                            leaderboard_batch.append(entry)
+                            bulk.insert(entry)
+                        #if len(leaderboard_batch) == 0:
+                        #    print "Empty leaderboard!"
+
+                        ids = []
+
+                        try:
+                            #ids = leaderboard_collection.insert(leaderboard_batch)
+                            #print(ids)
+
+                            #Insert Efforts Batch into MongoDB
+                            result = bulk.execute()
+                            print(result)
+                            logger.info("[Segment:%s][Total:%d] Total Number of Leaderboard Entries inserted into Mongo is %d",
+                                                        segment_id, num_athletes, entry_num)
+                        except BulkWriteError as bwe:
+                            logger.exception("### BulkWriteError inserting leaderboard: %s", bwe)
+                            pprint.pprint(bwe.details)
+                        except pymongo.errors.DuplicateKeyError as dk:
+                            logger.exception("### Exception inserting leaderboard: %s", dk)
+                            logger.info("[Segment:%s][Total:%d] Total Number of Leaderboard Entries inserted into Mongo is %d",
+                                                        segment_id, num_athletes, len(ids))
+                        except Exception as e:
+                            #any other exception
+                            logger.exception("### Exception inserting leaderboard: %s", dk)
+                            logger.info("[Segment:%s][Total:%d] Total Number of Leaderboard Entries inserted into Mongo is %d",
+                                                        segment_id, num_athletes, len(ids))
+        except Exception as e:
+            #any exception while processing zip
+            logger.exception("### Exception processing zip: %s", str(zipcode))
+            missed_zips.append(str(zipcode))
+            continue
+
+    print("@@@@@ Missed Zips @@@@\n")
+    print(missed_zips)
+    print("\n\n")
+    print("@@@@@ Missed Segments @@@@\n")
+    print(missed_segments)
+
     print "Finished acquiring data: \n \
             Total Segments: " + str(segments_collection.count()) + "\n \
             Total Leaderboards: " + str(leaderboard_collection.count()) + "\n"
