@@ -10,6 +10,7 @@ import json
 import urllib
 import urllib2
 import StringIO
+import ast
 import pprint
 import pymongo
 from pymongo import MongoClient
@@ -48,6 +49,7 @@ def get_zip():
 
 
 def fetch_store_segment_and_leaderboards():
+    # Add unique keys
     segments_collection.ensure_index("id", unique=True)
     leaderboard_collection.ensure_index("effort_id", unique=True)
 
@@ -56,7 +58,9 @@ def fetch_store_segment_and_leaderboards():
     #KMS: Iterate through the zip codes, compiling leaderboard and segment data
     for zipcode in get_zip():
         #generate a search grid for the zip code
-        bbox = eval(zip_data_collection.find_one({'zip': str(zipcode)})['bbox'])
+        bbox = zip_data_collection.find_one({'zip': str(zipcode)})['bbox']
+        bbox = ast.literal_eval(bbox)
+        #logger.info("Bounding Box: " + str(bbox))
         grid = SearchGrid(bbox)
         for parameters in grid.define_strava_params():
             for segment in explore_segments(parameters):
