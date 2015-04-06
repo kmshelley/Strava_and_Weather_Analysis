@@ -30,7 +30,7 @@ def acquire_metar_records(url,filename,id_list=None):
     try:
         urllib.urlretrieve(url + filename,outFilePath)
 
-        bulk = db.hourly_coll.initialize_ordered_bulk_op()
+        bulk = hourly_coll.initialize_ordered_bulk_op()
         z = zipfile.ZipFile(outFilePath)
         for f in z.namelist():
             if f.find('hourly.txt') > -1:
@@ -38,17 +38,16 @@ def acquire_metar_records(url,filename,id_list=None):
                 with z.open(f,'r') as hourlyFile:
                     csv_dict = csv.DictReader(hourlyFile)
                     for row in csv_dict:
-                        if id_list:
-                            if row['WBAN'] in id_list:
-                                bulk.insert(row)
-                        else:
+                        wban,date,time = row['WBAN'],row['Date'],row['Time']
+                        #if the WBAN is in the ID list and the hourly record has not yet been inserted
+                        if wban in id_list and len(list(hourly_coll.find({'WBAN':wban,'Date':date,'Time':time}))) == 0:
                             bulk.insert(row)
                 result = bulk.execute()
                 pprint.pprint(result)
         z.close()
         os.remove(outFilePath)
     except Exception as e:
-        print "####ERROR: " + str(e)
+        print "####ERROR: %s" % e
 
 def acquire_WBAN_definitions(url):
     wban_coll = db['WBAN']
@@ -66,13 +65,11 @@ def acquire_WBAN_definitions(url):
             for row in csv_dict:
                 if not wban_coll.find_one({'WBAN_ID':row['WBAN_ID']}):
                     #if the WBAN station info is not already in the database, add it
-                    wban_coll.insert({k:row[k].decode('utf8','ignore') for k in row}) #decode text, I was getting utf-8 errors without this
+                    wban_coll.insert(row) 
         z.close()
         os.remove(outFilePath)
     except Exception as e:
-        print "####ERROR: " + str(e)
-
-
+        print "####ERROR: %s" % e
 
 #http://cdo.ncdc.noaa.gov/qclcd_ascii/199607.tar.gz <- filename format before 7/2007
 if __name__ == '__main__':
