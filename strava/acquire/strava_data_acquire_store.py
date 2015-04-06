@@ -166,15 +166,13 @@ def fetch_store_segment_and_leaderboards():
                         #if len(leaderboard_batch) == 0:
                         #    print "Empty leaderboard!"
 
-                        ids = []
-
                         try:
                             #ids = leaderboard_collection.insert(leaderboard_batch)
                             #print(ids)
 
                             #Insert Efforts Batch into MongoDB
                             result = bulk.execute()
-                            print(result)
+                            pprint.pprint(result)
                             logger.info("[Segment:%s][Total:%d] Total Number of Leaderboard Entries inserted into Mongo is %d",
                                                         segment_id, num_athletes, entry_num)
                         except BulkWriteError as bwe:
