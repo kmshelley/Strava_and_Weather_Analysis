@@ -166,7 +166,7 @@ def fetch_store_segment_and_leaderboards():
                         #if len(leaderboard_batch) == 0:
                         #    print "Empty leaderboard!"
 
-                        ids = []
+                        result = None
 
                         try:
                             #ids = leaderboard_collection.insert(leaderboard_batch)
@@ -174,12 +174,13 @@ def fetch_store_segment_and_leaderboards():
 
                             #Insert Efforts Batch into MongoDB
                             result = bulk.execute()
-                            print(result)
+                            pprint.pprint(result)
                             logger.info("[Segment:%s][Total:%d] Total Number of Leaderboard Entries inserted into Mongo is %d",
                                                         segment_id, num_athletes, entry_num)
                         except BulkWriteError as bwe:
                             logger.exception("### BulkWriteError inserting leaderboard: %s", bwe)
-                            pprint.pprint(bwe.details)
+                            #pprint.pprint(bwe.details)
+                            logger.error("Keys Inserted: %d", bwe.)
                         except pymongo.errors.DuplicateKeyError as dk:
                             logger.exception("### Exception inserting leaderboard: %s", dk)
                             logger.info("[Segment:%s][Total:%d] Total Number of Leaderboard Entries inserted into Mongo is %d",
