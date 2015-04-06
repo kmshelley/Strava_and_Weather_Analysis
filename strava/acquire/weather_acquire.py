@@ -86,14 +86,14 @@ if __name__ == '__main__':
     CA_stations = [station['WBAN_ID'] for station in list(wban_coll.find({'STATE_PROVINCE':'CA'},{'WBAN_ID':1,'_id':0}))]
     #print CA_stations
 
-    months = ['201302','201303','201304','201305',
-    '201306','201307','201308','201309','201310','201311','201312',
-    '201401','201402','20140303','201404','201405','201406','201407',
-    '201408','201409','201410','201411','201412','201501','201502','201503']
-    for month in months:
-        local_start = dt.datetime.now()
-        #get hourly weather records for the California stations
-        acquire_metar_records('http://cdo.ncdc.noaa.gov/qclcd_ascii/','QCLCD'+month+'.zip',CA_stations)
-        print "Finished collecting weather data for " + month + ".\nTotal Runtime: " + str(dt.datetime.now() - local_start)
+   months = range(12,0,-1)
+    years = range(2015,2012,-1)
+    for year in years:
+        for month in months:
+            local_start = dt.datetime.now()
+            #get hourly weather records for the California stations
+            acquire_metar_records('http://cdo.ncdc.noaa.gov/qclcd_ascii/','QCLCD%04d%02d.zip' % (year,month),CA_stations)
+            print "Finished collecting weather data for %04d%02d." % (year,month)
+            print "Total Runtime: " + str(dt.datetime.now() - local_start)    
     print "Finished!\nTotal Run Time: " + str(dt.datetime.now() - total_start)
     print db.command("dbstats")
