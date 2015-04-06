@@ -6,7 +6,7 @@
 #
 # Created:     3/16/2015
 #-------------------------------------------------------------------------------
-
+import contextlib
 import urllib
 import os
 import zipfile
@@ -35,7 +35,7 @@ def acquire_metar_records(url,filename,id_list=None):
         for f in z.namelist():
             if f.find('hourly.txt') > -1:
                 #get observation info
-                with z.open(f,'r') as hourlyFile:
+                with contextlib.closing(z.open(f,'r')) as hourlyFile:
                     csv_dict = csv.DictReader(hourlyFile)
                     for row in csv_dict:
                         wban,date,time = row['WBAN'],row['Date'],row['Time']
@@ -60,7 +60,7 @@ def acquire_WBAN_definitions(url):
         urllib.urlretrieve(url,outFilePath)
 
         z = zipfile.ZipFile(outFilePath)
-        with z.open(unzip_file,'r') as wban:
+        with contextlib.closing(z.open(unzip_file,'r')) as wban:
             csv_dict = csv.DictReader(wban,dialect='WBAN_dialect')
             for row in csv_dict:
                 if not wban_coll.find_one({'WBAN_ID':row['WBAN_ID']}):
