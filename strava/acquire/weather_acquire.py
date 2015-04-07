@@ -204,7 +204,8 @@ def collect_and_store_weather_data():
                 local_start = dt.datetime.now()
                 #get hourly weather records for the California stations
                 acquire_metar_records('http://cdo.ncdc.noaa.gov/qclcd_ascii/','QCLCD%04d%02d.zip' % (year,month),CA_stations)
-                print "Finished collecting weather data for " + str(year) + month + ".\nTotal Runtime: " + str(dt.datetime.now() - local_start)        
+                print "Finished collecting weather data for %04d%02d." % (year,month)
+                print "Total Runtime: " + str(dt.datetime.now() - local_start)        
         print "Finished!\nTotal Run Time: " + str(dt.datetime.now() - total_start)
         print db.command("dbstats")
 
