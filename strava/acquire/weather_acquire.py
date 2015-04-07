@@ -42,12 +42,13 @@ def clean_up_files():
 def acquire_metar_records(url,filename,id_list=None):
     #hourly_coll = db['hourly_records']
 
-    outFilePath = filename
+    outFilePath = os.path.join(os.getcwd(),filename)
     month = filename[5:-4]
 
     urllib.urlretrieve(url + filename,outFilePath)
-    if os.path.isfile(outFilePath):
-        #if the url passed to the def exists and executes correctly
+    if os.path.isfile(outFilePath) and zipfile.is_zipfile(outFilePath):
+        #if the url passed to the def exists and is a valid zip file
+        #added for Linux (was creating an empty file for non-existent url downloads)
         bulk = db.hourly_records.initialize_ordered_bulk_op()
         bulk_count=0#for keeping track of bulk operations
         z = zipfile.ZipFile(outFilePath)
@@ -82,12 +83,13 @@ def acquire_WBAN_definitions(url):
     csv.register_dialect('WBAN_dialect', delimiter='|') #WBAN file is PSV
 
     zip_file = url.split('/')[-1]
-    outFilePath = zip_file
+    outFilePath = os.path.join(os.getcwd(),zip_file)
     unzip_file = zip_file[:-4]
 
     urllib.urlretrieve(url,outFilePath)
-    if os.path.isfile(outFilePath):
-        #if the url passed to the def exists and executes correctly
+    if os.path.isfile(outFilePath) and zipfile.is_zipfile(outFilePath):
+        #if the url passed to the def exists and is a valid zip file
+        #added for Linux (was creating an empty file for non-existent url downloads)
         bulk = db.WBAN.initialize_ordered_bulk_op()
         bulk_count = 0 #for chunking bulk operations
         z = zipfile.ZipFile(outFilePath)
@@ -212,9 +214,9 @@ def collect_and_store_weather_data():
 def get_weather():
     #for running code        
     try:
-        #clean up existing data files
-        clean_up_files()
         collect_and_store_weather_data()
+        #clean up any existing data files
+        clean_up_files()
     except KeyboardInterrupt,SystemExit:
         print "Interrupted, closing..."
         #clean up existing data files before quitting
