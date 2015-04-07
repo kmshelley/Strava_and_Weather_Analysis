@@ -17,7 +17,6 @@ import datetime as dt
 import sys
 from util.config import Config
 import contextlib
-import lat_lng #(for lat/lng formulas, from util folder)
 
 config = Config()
 
@@ -43,77 +42,88 @@ def clean_up_files():
 def acquire_metar_records(url,filename,id_list=None):
     #hourly_coll = db['hourly_records']
 
-    outFilePath = filename
+    outFilePath = os.path.join(os.getcwd(),filename)
     month = filename[5:-4]
 
     urllib.urlretrieve(url + filename,outFilePath)
-
-    bulk = db.hourly_records.initialize_ordered_bulk_op()
-    bulk_count=0#for keeping track of bulk operations
-    z = zipfile.ZipFile(outFilePath)
-    for f in z.namelist():
-        if f.find('hourly.txt') > -1:
-            #get observation info
-            with contextlib.closing(z.open(f,'r')) as hourlyFile:
-                csv_dict = csv.DictReader(hourlyFile)
-                for row in csv_dict:
-                    wban,date,time = row['WBAN'],row['Date'],row['Time']
-                    if row['WBAN'] in id_list or id_list is None:
-                        #if the WBAN ID is in the id list of stations to search,
-                        #or if we are searching all stations (id_list not specified)
-                        if len(list(db.hourly_records.find({'WBAN':wban,'Date':date,'Time':time}))) == 0:
-                            _id = db.WBAN.find_one({'WBAN_ID':wban})['_id'] #get the mongo id from WBAN collection
-                            bulk.insert(row)
-                            bulk.update({'WBAN':wban,'Date':date,'Time':time},{'$set':{'wban_rec_id':_id}}) #add the WBAN coll id for indexing
-                            bulk_count+=1
-                    if bulk_count == 1000:
-                        #perform up to 1000 bulk inserts at a time
+    if os.path.isfile(outFilePath) and zipfile.is_zipfile(outFilePath):
+        #if the url passed to the def exists and is a valid zip file
+        #added for Linux (was creating an empty file for non-existent url downloads)
+        bulk = db.hourly_records.initialize_ordered_bulk_op()
+        bulk_count=0#for keeping track of bulk operations
+        z = zipfile.ZipFile(outFilePath)
+        for f in z.namelist():
+            if f.find('hourly.txt') > -1:
+                #get observation info
+                with contextlib.closing(z.open(f,'r')) as hourlyFile:
+                    csv_dict = csv.DictReader(hourlyFile)
+                    for row in csv_dict:
+                        wban,date,time = row['WBAN'],row['Date'],row['Time']
+                        if row['WBAN'] in id_list or id_list is None:
+                            #if the WBAN ID is in the id list of stations to search,
+                            #or if we are searching all stations (id_list not specified)
+                            if len(list(db.hourly_records.find({'WBAN':wban,'Date':date,'Time':time}))) == 0:
+                                _id = db.WBAN.find_one({'WBAN_ID':wban})['_id'] #get the mongo id from WBAN collection
+                                bulk.insert(row)
+                                bulk.find({'WBAN':wban,'Date':date,'Time':time}).update({'$set':{'wban_rec_id':_id}}) #add the WBAN coll id for indexing
+                                bulk_count+=1
+                        if bulk_count == 1000:
+                            #perform up to 1000 bulk inserts at a time
+                            result = bulk.execute()
+                            pprint.pprint(result)
+                            bulk_count=0#reset the bulk op count
+                            bulk = None
+                            bulk = db.WBAN.initialize_ordered_bulk_op()#reset the bulk op
+                    try:
+                        #perform a final bulk insert
                         result = bulk.execute()
                         pprint.pprint(result)
-                        bulk_count=0#reset the bulk op count
-                        bulk = None
-                        bulk = db.WBAN.initialize_ordered_bulk_op()#reset the bulk op
-                result = bulk.execute() #perform a final bulk operation
-                pprint.pprint(result)
-    z.close()
-    os.remove(outFilePath)
+                    except Exception as e:
+                        print "#####ERROR: %s" % e
+        z.close()
+        os.remove(outFilePath)
 
 def acquire_WBAN_definitions(url):
     csv.register_dialect('WBAN_dialect', delimiter='|') #WBAN file is PSV
 
     zip_file = url.split('/')[-1]
-    outFilePath = zip_file
+    outFilePath = os.path.join(os.getcwd(),zip_file)
     unzip_file = zip_file[:-4]
 
     urllib.urlretrieve(url,outFilePath)
-
-    bulk = db.WBAN.initialize_ordered_bulk_op()
-    bulk_count = 0 #for chunking bulk operations
-    z = zipfile.ZipFile(outFilePath)
-    with contextlib.closing(z.open(unzip_file,'r')) as wban:
-        csv_dict = csv.DictReader(wban,dialect='WBAN_dialect')
-        for row in csv_dict:
-            if not db.WBAN.find_one({'WBAN_ID':row['WBAN_ID']}):
-                #if the WBAN station info is not already in the database, add it
-                decode_row = {}
-                for k in row: decode_row[k] = row[k].decode('utf-8','ignore') #decode text, I was getting utf-8 errors without this
-                #add geojson point based on "LOCATION" field, for indexing
-                decode_row['type'] = 'Point'#geojson coordinate record for indexing;
-                decode_row['coordinates'] = clean_lat_long(row["LOCATION"])#format original text string into lng/lat list
-                bulk.insert(decode_row)
-                bulk_count+=1
-            if bulk_count == 1000:
-                #perform up to 1000 inserts at a time
-                result=bulk.execute()
+    if os.path.isfile(outFilePath) and zipfile.is_zipfile(outFilePath):
+        #if the url passed to the def exists and is a valid zip file
+        #added for Linux (was creating an empty file for non-existent url downloads)
+        bulk = db.WBAN.initialize_ordered_bulk_op()
+        bulk_count = 0 #for chunking bulk operations
+        z = zipfile.ZipFile(outFilePath)
+        with contextlib.closing(z.open(unzip_file,'r')) as wban:
+            csv_dict = csv.DictReader(wban,dialect='WBAN_dialect')
+            for row in csv_dict:
+                if not db.WBAN.find_one({'WBAN_ID':row['WBAN_ID']}):
+                    #if the WBAN station info is not already in the database, add it
+                    decode_row = {}
+                    for k in row: decode_row[k] = row[k].decode('utf-8','ignore') #decode text, I was getting utf-8 errors without this
+                    #add geojson point based on "LOCATION" field, for indexing
+                    decode_row['type'] = 'Point'#geojson coordinate record for indexing;
+                    decode_row['coordinates'] = clean_lat_long(row["LOCATION"])#format original text string into lng/lat list
+                    bulk.insert(decode_row)
+                    bulk_count+=1
+                if bulk_count == 1000:
+                    #perform up to 1000 inserts at a time
+                    result=bulk.execute()
+                    pprint.pprint(result)
+                    bulk_count=0
+                    bulk = None
+                    bulk = db.WBAN.initialize_ordered_bulk_op()#reset the bulk op
+            try:
+                #perform a final bulk insert
+                result = bulk.execute()
                 pprint.pprint(result)
-                bulk_count=0
-                bulk = None
-                bulk = db.WBAN.initialize_ordered_bulk_op()#reset the bulk op
-        #perform a final bulk insert
-        result = bulk.execute()
-        pprint.pprint(result)
-    z.close()
-    os.remove(outFilePath)
+            except Exception as e:
+                print "#####ERROR: %s" % e
+        z.close()
+        os.remove(outFilePath)
 
 
 def convert_lat_lon_strings(string):
@@ -201,21 +211,23 @@ def collect_and_store_weather_data():
                 local_start = dt.datetime.now()
                 #get hourly weather records for the California stations
                 acquire_metar_records('http://cdo.ncdc.noaa.gov/qclcd_ascii/','QCLCD%04d%02d.zip' % (year,month),CA_stations)
-                print "Finished collecting weather data for " + str(year) + month + ".\nTotal Runtime: " + str(dt.datetime.now() - local_start)        
-        print "Finished!\nTotal Run Time: " + str(dt.datetime.now() - total_start)
+                print "Finished collecting weather data for %04d%02d." % (year,month)
+                print "Total Runtime: %s " % (dt.datetime.now() - local_start)        
+        print "Finished!\nTotal Run Time: %s " % (dt.datetime.now() - total_start)
         print db.command("dbstats")
 
     except Exception as e:
         print "#####ERROR: %s" % e
 
-#for running code        
-try:
-    #clean up existing data files
-    clean_up_files()
-    collect_and_store_weather_data()
-except KeyboardInterrupt,SystemExit:
-    print "Interrupted, closing..."
-    #clean up existing data files before quitting
-    clean_up_files()
-except Exception as e:
-    print "#####ERROR: %s" % e
+def get_weather():
+    #for running code        
+    try:
+        collect_and_store_weather_data()
+        #clean up any existing data files
+        clean_up_files()
+    except KeyboardInterrupt,SystemExit:
+        print "Interrupted, closing..."
+        #clean up existing data files before quitting
+        clean_up_files()
+    except Exception as e:
+        print "#####ERROR: %s" % e
