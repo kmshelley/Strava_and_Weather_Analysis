@@ -209,14 +209,15 @@ def collect_and_store_weather_data():
     except Exception as e:
         print "#####ERROR: %s" % e
 
-#for running code        
-try:
-    #clean up existing data files
-    clean_up_files()
-    collect_and_store_weather_data()
-except KeyboardInterrupt,SystemExit:
-    print "Interrupted, closing..."
-    #clean up existing data files before quitting
-    clean_up_files()
-except Exception as e:
-    print "#####ERROR: %s" % e
+def get_weather():
+    #for running code        
+    try:
+        #clean up existing data files
+        clean_up_files()
+        collect_and_store_weather_data()
+    except KeyboardInterrupt,SystemExit:
+        print "Interrupted, closing..."
+        #clean up existing data files before quitting
+        clean_up_files()
+    except Exception as e:
+        print "#####ERROR: %s" % e
