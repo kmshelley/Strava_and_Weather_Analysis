@@ -73,7 +73,7 @@ def acquire_metar_records(url,filename,id_list=None):
                             pprint.pprint(result)
                             bulk_count=0#reset the bulk op count
                             bulk = None
-                            bulk = db.WBAN.initialize_ordered_bulk_op()#reset the bulk op
+                            bulk = db.hourly_records.initialize_ordered_bulk_op()#reset the bulk op
                     try:
                         #perform a final bulk insert
                         result = bulk.execute()
