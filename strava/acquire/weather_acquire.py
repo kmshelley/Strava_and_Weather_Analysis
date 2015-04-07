@@ -65,7 +65,7 @@ def acquire_metar_records(url,filename,id_list=None):
                             if len(list(db.hourly_records.find({'WBAN':wban,'Date':date,'Time':time}))) == 0:
                                 _id = db.WBAN.find_one({'WBAN_ID':wban})['_id'] #get the mongo id from WBAN collection
                                 bulk.insert(row)
-                                bulk.update({'WBAN':wban,'Date':date,'Time':time},{'$set':{'wban_rec_id':_id}}) #add the WBAN coll id for indexing
+                                bulk.find({'WBAN':wban,'Date':date,'Time':time}).update({'$set':{'wban_rec_id':_id}}) #add the WBAN coll id for indexing
                                 bulk_count+=1
                         if bulk_count == 1000:
                             #perform up to 1000 bulk inserts at a time
@@ -74,8 +74,12 @@ def acquire_metar_records(url,filename,id_list=None):
                             bulk_count=0#reset the bulk op count
                             bulk = None
                             bulk = db.WBAN.initialize_ordered_bulk_op()#reset the bulk op
-                    result = bulk.execute() #perform a final bulk operation
-                    pprint.pprint(result)
+                    try:
+                        #perform a final bulk insert
+                        result = bulk.execute()
+                        pprint.pprint(result)
+                    except Exception as e:
+                        print "#####ERROR: %s" % e
         z.close()
         os.remove(outFilePath)
 
@@ -112,9 +116,12 @@ def acquire_WBAN_definitions(url):
                     bulk_count=0
                     bulk = None
                     bulk = db.WBAN.initialize_ordered_bulk_op()#reset the bulk op
-            #perform a final bulk insert
-            result = bulk.execute()
-            pprint.pprint(result)
+            try:
+                #perform a final bulk insert
+                result = bulk.execute()
+                pprint.pprint(result)
+            except Exception as e:
+                print "#####ERROR: %s" % e
         z.close()
         os.remove(outFilePath)
 
@@ -205,8 +212,8 @@ def collect_and_store_weather_data():
                 #get hourly weather records for the California stations
                 acquire_metar_records('http://cdo.ncdc.noaa.gov/qclcd_ascii/','QCLCD%04d%02d.zip' % (year,month),CA_stations)
                 print "Finished collecting weather data for %04d%02d." % (year,month)
-                print "Total Runtime: " + str(dt.datetime.now() - local_start)        
-        print "Finished!\nTotal Run Time: " + str(dt.datetime.now() - total_start)
+                print "Total Runtime: %s " % (dt.datetime.now() - local_start)        
+        print "Finished!\nTotal Run Time: %s " % (dt.datetime.now() - total_start)
         print db.command("dbstats")
 
     except Exception as e:
