@@ -148,7 +148,7 @@ def fetch_store_segment_and_leaderboards():
                         #continue
                     except Exception as e:
                         #any other exception
-                        logger.exception("### Exception inserting segment: {0}".format(dk))
+                        logger.exception("### Exception inserting segment: {0}".format(e))
                         missed_segments.append(segment_id)
                         continue
 
@@ -220,7 +220,7 @@ def fetch_store_segment_and_leaderboards():
                                                         segment_id, num_athletes, len(ids))
                         except Exception as e:
                             #any other exception
-                            logger.exception("### Exception inserting leaderboard: %s", dk)
+                            logger.exception("### Exception inserting leaderboard: %s", e)
                             logger.info("[Segment:%s][Total:%d] Total Number of Leaderboard Entries inserted into Mongo is %d",
                                                         segment_id, num_athletes, len(ids))
         except Exception as e:
