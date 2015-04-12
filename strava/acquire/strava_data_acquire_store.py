@@ -93,7 +93,7 @@ def get_strava_header():
         sys.exit("@@@@@ No Strava Tokens found in config, aborting data collection!!!")
 
     total_strava_calls += 1
-    return strava_tokens[total_strava_calls % len(strava_tokens)]
+    return {"Authorization": "Bearer %s" % strava_tokens[total_strava_calls % len(strava_tokens)]}
 
 
 def fetch_store_segment_and_leaderboards():
