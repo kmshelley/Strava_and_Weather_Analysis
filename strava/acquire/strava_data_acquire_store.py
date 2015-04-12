@@ -160,7 +160,7 @@ def fetch_store_segment_and_leaderboards():
                     page_num = 1
                     entry_num = 0;
 
-                    while page_num < 2 + num_athletes / config.STRAVA_PAGE_LIMIT:
+                    while num_athletes > 0 and page_num < 2 + num_athletes / config.STRAVA_PAGE_LIMIT:
                         leaderboard_batch = []
                         logger.info("[Segment:{0}] Fetching Leader-board Page: {1}".format(segment_id, page_num))
 
