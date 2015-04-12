@@ -126,7 +126,7 @@ def fetch_store_segment_and_leaderboards():
                     try:
                         if res.status_code != 200 or "errors" in res.json():
                             pprint.pprint(res.json())
-                            time.sleep(MIN_2)()
+                            time.sleep(MIN_2)
                             missed_segments.append(segment_id)
                             continue
                     except Exception as e:
