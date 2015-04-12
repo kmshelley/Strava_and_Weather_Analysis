@@ -29,7 +29,13 @@ segments_collection = db[cfg.get("mongo", "coll_segment")]
 leaderboard_collection = db[cfg.get("mongo", "coll_leaderboards")]
 zip_data_collection = db[cfg.get("mongo", "coll_zip")]
 
-#PARAMS = {"bounds": "37.695010" + "," + "-122.510605" + "," + "37.815531" + "," + "-122.406578"}
+
+# Strava Tokens
+strava_tokens = []
+total_strava_calls = 0
+
+MIN_1 = 60
+MIN_2 = 2 * MIN_1
 
 # Following zips/segments were excluded due to Exceptions during Data Collection
 missed_segments = []
@@ -38,7 +44,24 @@ missed_zips = []
 
 def explore_segments(parameters):
     logger.info('Exploring segments for bounds: {0}'.format(parameters))
-    res = requests.get(config.STRAVA_API_SEGMENT_EXPLORE_URI, headers=config.STRAVA_API_HEADER, params=parameters)
+
+    res = None
+    success = False
+
+    while not success:
+        try:
+            res = requests.get(config.STRAVA_API_SEGMENT_EXPLORE_URI, headers=get_strava_header(), params=parameters)
+
+            if res.status_code != 200 or "errors" in res.json():
+                pprint.pprint(res.json())
+                time.sleep(MIN_2)
+                missed_segments.append(segment_id)
+                continue
+            success = True # Come out of the loop
+        except Exception as e:
+            logger.exception("### Exception exploring segments: {0}".format(parameters))
+            time.sleep(MIN_2)
+            continue
 
     #print pprint.pprint(res.json())
     segments = res.json()
@@ -49,7 +72,7 @@ def explore_segments(parameters):
 def get_zip():
     logger.info("Calling generator for zip codes which start with 9 [CA]")
     regx = re.compile("^9.*")
-    zip_cursor = zip_data_collection.find({"zip": regx})
+    zip_cursor = zip_data_collection.find({"zip": regx}).sort("zip", -1)
     # Store the cursor into a list to avoid timeouts by keeping the cursor open for a long time
     zip_list = []
     for z in zip_cursor:
@@ -58,6 +81,19 @@ def get_zip():
         yield z
 
 
+def get_strava_header():
+    global total_strava_calls
+    if len(strava_tokens) == 0:  # First Time
+        if cfg.get("strava", "access_token_1"):
+            strava_tokens.append(cfg.get("strava", "access_token_1"))
+        if cfg.get("strava", "access_token_2"):
+            strava_tokens.append(cfg.get("strava", "access_token_2"))
+
+    if len(strava_tokens) == 0:
+        sys.exit("@@@@@ No Strava Tokens found in config, aborting data collection!!!")
+
+    total_strava_calls += 1
+    return strava_tokens[total_strava_calls % len(strava_tokens)]
 
 
 def fetch_store_segment_and_leaderboards():
@@ -85,17 +121,17 @@ def fetch_store_segment_and_leaderboards():
                 for segment in explore_segments(parameters):
                     segment_id = segment["id"]
                     logger.info('ZIP [{0}] Fetching segment: {1}'.format(zipcode, segment_id))
-                    res = requests.get(config.STRAVA_API_SEGMENT_URI % segment_id, headers=config.STRAVA_API_HEADER)
+                    res = requests.get(config.STRAVA_API_SEGMENT_URI % segment_id, headers=get_strava_header())
 
                     try:
                         if res.status_code != 200 or "errors" in res.json():
                             pprint.pprint(res.json())
-                            time.sleep(60)
+                            time.sleep(MIN_2)()
                             missed_segments.append(segment_id)
                             continue
                     except Exception as e:
-                        logger.exception("### Exception fetching segments: %s", segment_id)
-                        time.sleep(60*5)
+                        logger.exception("### Exception fetching segments: {0}".format(segment_id))
+                        time.sleep(MIN_2)
                         missed_segments.append(segment_id)
                         continue
 
@@ -105,18 +141,18 @@ def fetch_store_segment_and_leaderboards():
                         #Insert Segment into MongoDB
                         _id = segments_collection.insert(res.json())
                     except pymongo.errors.DuplicateKeyError as dk:
-                        logger.exception("### Exception inserting segment: %s", dk)
+                        logger.exception("### Exception inserting segment: {0}".format(dk))
                         #Get Segment ID from DB
                         _id = segments_collection.find_one({'id': segment_id})["_id"]
                         # This segment has already been processed earlier
                         #continue
                     except Exception as e:
                         #any other exception
-                        logger.exception("### Exception inserting segment: %s", dk)
+                        logger.exception("### Exception inserting segment: {0}".format(dk))
                         missed_segments.append(segment_id)
                         continue
 
-                    logger.info("DB Unique Key %s", _id)
+                    logger.info("DB Unique Key: {0}".format(_id))
 
                     num_athletes = res.json()['athlete_count']
                     logger.info('Athlete Count: {0}'.format(num_athletes))
@@ -130,11 +166,11 @@ def fetch_store_segment_and_leaderboards():
 
 
                         res = requests.get(config.STRAVA_API_SEGMENT_LEADERBOARD_URI % segment_id,
-                                           headers=config.STRAVA_API_HEADER,
+                                           headers=get_strava_header(),
                                            params={'per_page': config.STRAVA_PAGE_LIMIT, 'page': page_num})
                         '''
                         res = requests.get(config.STRAVA_API_SEGMENT_ALL_EFFORTS_URI % segment_id,
-                                           headers=config.STRAVA_API_HEADER)
+                                           headers=get_strava_header())
                         '''
 
                         #pprint.pprint(res.json())
@@ -142,13 +178,13 @@ def fetch_store_segment_and_leaderboards():
                         try:
                             if res.status_code != 200 or "errors" in res.json():
                                 pprint.pprint(res.json())
-                                logger.info("Sleeping after Requesting Retry for Page: ", page_num)
-                                time.sleep(60)
+                                logger.info("Sleeping after Requesting Retry for Page: {0}".format(page_num))
+                                time.sleep(MIN_2)
                                 continue
                         except Exception as e:
-                            logger.exception("### Exception fetching Leaderboard Entries for Segment: %s", segment_id)
-                            logger.info("Sleeping after Exception for Page: %s", page_num)
-                            time.sleep(60*5)
+                            logger.exception("### Exception fetching Leaderboard Entries for Segment: {0}".format(segment_id))
+                            logger.info("Sleeping after Exception for Page: {0}".format(page_num))
+                            time.sleep(MIN_2)
                             continue
 
                         page_num += 1
@@ -176,8 +212,8 @@ def fetch_store_segment_and_leaderboards():
                             logger.info("[Segment:%s][Total:%d] Total Number of Leaderboard Entries inserted into Mongo is %d",
                                                         segment_id, num_athletes, entry_num)
                         except BulkWriteError as bwe:
-                            logger.exception("### BulkWriteError inserting leaderboard: %s", bwe)
-                            pprint.pprint(bwe.details)
+                            logger.exception("### BulkWriteError inserting leaderboard: {0}".format(bwe))
+                            #pprint.pprint(bwe.details) # Commented out: Prints out a big JSON
                         except pymongo.errors.DuplicateKeyError as dk:
                             logger.exception("### Exception inserting leaderboard: %s", dk)
                             logger.info("[Segment:%s][Total:%d] Total Number of Leaderboard Entries inserted into Mongo is %d",
@@ -208,5 +244,9 @@ def fetch_store_segment_and_leaderboards():
 if __name__ == '__main__':
     """Test"""
     logger.info("Invoking Main...")
+    '''
     for z in get_zip():
         print(z)
+    '''
+    for i in xrange(100):
+        get_strava_header()
