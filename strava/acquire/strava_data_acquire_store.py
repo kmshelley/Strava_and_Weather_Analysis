@@ -126,7 +126,7 @@ def fetch_store_segment_and_leaderboards():
                     try:
                         if res.status_code != 200 or "errors" in res.json():
                             pprint.pprint(res.json())
-                            time.sleep(MIN_2)()
+                            time.sleep(MIN_2)
                             missed_segments.append(segment_id)
                             continue
                     except Exception as e:
@@ -148,7 +148,7 @@ def fetch_store_segment_and_leaderboards():
                         #continue
                     except Exception as e:
                         #any other exception
-                        logger.exception("### Exception inserting segment: {0}".format(dk))
+                        logger.exception("### Exception inserting segment: {0}".format(e))
                         missed_segments.append(segment_id)
                         continue
 
@@ -160,7 +160,7 @@ def fetch_store_segment_and_leaderboards():
                     page_num = 1
                     entry_num = 0;
 
-                    while page_num < 2 + num_athletes / config.STRAVA_PAGE_LIMIT:
+                    while num_athletes > 0 and page_num < 2 + num_athletes / config.STRAVA_PAGE_LIMIT:
                         leaderboard_batch = []
                         logger.info("[Segment:{0}] Fetching Leader-board Page: {1}".format(segment_id, page_num))
 
@@ -220,7 +220,7 @@ def fetch_store_segment_and_leaderboards():
                                                         segment_id, num_athletes, len(ids))
                         except Exception as e:
                             #any other exception
-                            logger.exception("### Exception inserting leaderboard: %s", dk)
+                            logger.exception("### Exception inserting leaderboard: %s", e)
                             logger.info("[Segment:%s][Total:%d] Total Number of Leaderboard Entries inserted into Mongo is %d",
                                                         segment_id, num_athletes, len(ids))
         except Exception as e:
