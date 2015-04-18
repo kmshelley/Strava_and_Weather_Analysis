@@ -36,3 +36,67 @@ def bearing_from_two_lat_lons(lat1,lon1,lat2,lon2):
 def find_midpoint_between_lat_lons(lat1,lon1,lat2,lon2):
     return lat_lon_from_point_and_bearing(lat1,lon1,bearing_from_two_lat_lons(lat1,lon1,lat2,lon2),dist_lat_lon(lat1,lon1,lat2,lon2)/2)
 ########################################################################################
+
+
+def convert_lat_lon_strings(string):
+    #cleans a latitude or longitude text string into decimal degrees
+    from string import punctuation
+    for symbol in punctuation.replace('-','').replace('.',''):
+        string = string.replace(symbol,' ') #replace punctuation (other than - and .) with space
+    coord_list = string.split()
+    hemisphere = 1 #multiplier for converting hemispheres
+    if coord_list[-1] == 'N' or coord_list[-1] == 'S' or coord_list[-1] == 'E' or coord_list[-1] == 'W':
+        if coord_list[-1] == "S" or coord_list[-1] == "W":
+            #if the coordinate is in the southern or western hemisphere, the lat/lon is negative.
+            hemisphere = -1
+            if coord_list[0].find('-') == -1: coord_list[0].replace('-','')#remove the negative symbol if it exists (sign-change will take place in DMS conversion)
+        coord_list.pop()#remove the hemisphere indicator
+    coordinate = 0
+    denominator = 1
+    for i in range(len(coord_list)):
+        #DMS to decimal formula: deg = D + M/60 + S/3600
+        coordinate+=hemisphere*float(coord_list[i])/denominator
+        denominator*=60
+    if abs(coordinate) > 180:
+        return 0
+    return coordinate
+
+def clean_lat_long(orig_text):
+    #cleans a given a WBAN lat/lon entry, returns a [long, lat] list pair
+    try:
+        text = str(orig_text)
+        for char in text:
+            if char.isalpha():
+                #if there is an alpha character
+                if char not in  ['N','S','E','W']:
+                    text = text.replace(char,'') #remove any letters other than NSEW
+        #add space between coordinate and hemisphere symbol
+        text = text.replace('N',' N').replace('S',' S').replace('E',' E').replace('W',' W')
+        if text.find('/') > -1:
+            #if the lat long is delineated by a '/'
+            latstr,lonstr = text.split('/')[0],text.split('/')[1] #accounts for additional notations in locaiton field ('/altitude')
+        elif text.find(',') > -1:
+            #comma-separated
+            latstr,lonstr = text.split(',')
+        elif text.find('N') > -1:
+            #split by the north hemisphere symbol
+            latstr,lonstr = text.split('N')
+            latstr = latstr + 'N' #add north symbol back in
+        elif text.find('S') > -1:
+            #split by the south hemisphere symbol
+            latstr,lonstr = text.split('S')
+            latstr = latstr + 'S' #add south symbol back in
+        elif text == '':
+            #empty location field
+            return [0,0]
+        else:
+            #otherwise print the string and return none
+            print "Cannot parse lat/long: %s" % text
+            return [0,0]
+        lat,lng = convert_lat_lon_strings(latstr),convert_lat_lon_strings(lonstr)
+        return [lng,lat]
+    except Exception as e:
+        print "#####Error parsing lat/long: %s" % orig_text
+        print "#####ERROR: %s" % e
+        return [0,0]
+
