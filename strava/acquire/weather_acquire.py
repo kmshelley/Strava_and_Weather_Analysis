@@ -12,17 +12,22 @@ import os
 import zipfile
 import csv
 import pprint
-from pymongo import MongoClient, GEO2D
+from pymongo import MongoClient, GEOSPHERE
+from pymongo.errors import BulkWriteError
 import datetime as dt
 import sys
 from util.config import Config
+from util import lat_lng
 import contextlib
+import ast
 
 config = Config()
 
 # MongoDB Client & DB
 client = MongoClient(config.get("mongo", "uri"))
 db = client[config.get("mongo", "db_strava")]
+
+batch_size = ast.literal_eval(config.get("mongo","batch_size"))
 
 
 def clean_up_files():
@@ -49,7 +54,7 @@ def acquire_metar_records(url,filename,id_list=None):
     if os.path.isfile(outFilePath) and zipfile.is_zipfile(outFilePath):
         #if the url passed to the def exists and is a valid zip file
         #added for Linux (was creating an empty file for non-existent url downloads)
-        bulk = db.hourly_records.initialize_ordered_bulk_op()
+        bulk = db.hourly_records.initialize_unordered_bulk_op()
         bulk_count=0#for keeping track of bulk operations
         z = zipfile.ZipFile(outFilePath)
         for f in z.namelist():
@@ -62,24 +67,32 @@ def acquire_metar_records(url,filename,id_list=None):
                         if row['WBAN'] in id_list or id_list is None:
                             #if the WBAN ID is in the id list of stations to search,
                             #or if we are searching all stations (id_list not specified)
-                            if len(list(db.hourly_records.find({'WBAN':wban,'Date':date,'Time':time}))) == 0:
-                                _id = db.WBAN.find_one({'WBAN_ID':wban})['_id'] #get the mongo id from WBAN collection
-                                bulk.insert(row)
-                                bulk.find({'WBAN':wban,'Date':date,'Time':time}).update({'$set':{'wban_rec_id':_id}}) #add the WBAN coll id for indexing
-                                bulk_count+=1
-                        if bulk_count == 1000:
-                            #perform up to 1000 bulk inserts at a time
-                            result = bulk.execute()
-                            pprint.pprint(result)
+                            _id = wban+'_'+date+'_'+time #custom mongodb id
+                            row['_id'] = _id
+                            bulk.insert(row)
+                            bulk_count+=1
+                        if bulk_count == batch_size:
+                            #perform up to 'batch_size' bulk inserts at a time
+                            try:
+                                #perform a final bulk insert
+                                result = bulk.execute()
+                                pprint.pprint(result)
+                            except BulkWriteError as bwe:
+                                 pprint.pprint(bwe.details)
+                            except Exception as e:
+                                print "#####ERROR: %s" % e
                             bulk_count=0#reset the bulk op count
                             bulk = None
-                            bulk = db.hourly_records.initialize_ordered_bulk_op()#reset the bulk op
+                            bulk = db.hourly_records.initialize_unordered_bulk_op()#reset the bulk op
                     try:
                         #perform a final bulk insert
                         result = bulk.execute()
                         pprint.pprint(result)
+                    except BulkWriteError as bwe:
+                        pprint.pprint(bwe.details)
                     except Exception as e:
                         print "#####ERROR: %s" % e
+                        
         z.close()
         os.remove(outFilePath)
 
@@ -94,7 +107,7 @@ def acquire_WBAN_definitions(url):
     if os.path.isfile(outFilePath) and zipfile.is_zipfile(outFilePath):
         #if the url passed to the def exists and is a valid zip file
         #added for Linux (was creating an empty file for non-existent url downloads)
-        bulk = db.WBAN.initialize_ordered_bulk_op()
+        bulk = db.WBAN.initialize_unordered_bulk_op()
         bulk_count = 0 #for chunking bulk operations
         z = zipfile.ZipFile(outFilePath)
         with contextlib.closing(z.open(unzip_file,'r')) as wban:
@@ -105,85 +118,33 @@ def acquire_WBAN_definitions(url):
                     decode_row = {}
                     for k in row: decode_row[k] = row[k].decode('utf-8','ignore') #decode text, I was getting utf-8 errors without this
                     #add geojson point based on "LOCATION" field, for indexing
-                    decode_row['type'] = 'Point'#geojson coordinate record for indexing;
-                    decode_row['coordinates'] = clean_lat_long(row["LOCATION"])#format original text string into lng/lat list
+                    decode_row['loc'] = {'type':'Point','coordinates':lat_lng.clean_lat_long(row['LOCATION'])}#format original text string into lng/lat list into geojson format
                     bulk.insert(decode_row)
                     bulk_count+=1
-                if bulk_count == 1000:
-                    #perform up to 1000 inserts at a time
-                    result=bulk.execute()
-                    pprint.pprint(result)
+                if bulk_count == batch_size:
+                    #perform up to 'batch_size' inserts at a time
+                    try:
+                        #perform a final bulk insert
+                        result = bulk.execute()
+                        pprint.pprint(result)
+                    except BulkWriteError as bwe:
+                        pprint.pprint(bwe.details)
+                    except Exception as e:
+                        print "#####ERROR: %s" % e
                     bulk_count=0
                     bulk = None
-                    bulk = db.WBAN.initialize_ordered_bulk_op()#reset the bulk op
+                    bulk = db.WBAN.initialize_unordered_bulk_op()#reset the bulk op
             try:
                 #perform a final bulk insert
                 result = bulk.execute()
                 pprint.pprint(result)
+            except BulkWriteError as bwe:
+                pprint.pprint(bwe.details)
             except Exception as e:
                 print "#####ERROR: %s" % e
         z.close()
         os.remove(outFilePath)
 
-
-def convert_lat_lon_strings(string):
-    #cleans a latitude or longitude text string into decimal degrees
-    from string import punctuation
-    for symbol in punctuation.replace('-','').replace('.',''):
-        string = string.replace(symbol,' ') #replace punctuation (other than - and .) with space
-    coord_list = string.split()
-    if coord_list[-1] == 'N' or coord_list[-1] == 'S' or coord_list[-1] == 'E' or coord_list[-1] == 'W':
-        if coord_list[-1] == "S" or coord_list[-1] == "W":
-            #if the coordinate is in the southern or western hemisphere, the lat/lon is negative.
-            if coord_list[0].find('-') == -1: coord_list[0] = '-' + coord_list[0]
-        coord_list.pop()#remove the hemisphere indicator
-    coordinate = 0
-    denominator = 1
-    for i in range(len(coord_list)):
-        #DMS to decimal formula: deg = D + M/60 + S/3600
-        coordinate+=float(coord_list[i])/denominator
-        denominator*=60
-    if abs(coordinate) > 180:
-        return 0
-    return coordinate
-
-def clean_lat_long(orig_text):
-    #cleans a given a WBAN lat/lon entry, returns a [long, lat] list pair
-    try:
-        text = str(orig_text)
-        for char in text:
-            if char.isalpha():
-                #if there is an alpha character
-                if char not in  ['N','S','E','W']:
-                    text = text.replace(char,'') #remove any letters other than NSEW
-        #add space between coordinate and hemisphere symbol
-        text = text.replace('N',' N').replace('S',' S').replace('E',' E').replace('W',' W')
-        if text.find('/') > -1:
-            #if the lat long is delineated by a '/'
-            latstr,lonstr = text.split('/')[0],text.split('/')[1] #accounts for additional notations in locaiton field ('/altitude')
-        elif text.find(',') > -1:
-            #comma-separated
-            latstr,lonstr = text.split(',')
-        elif text.find('N') > -1:
-            #split by the north hemisphere symbol
-            latstr,lonstr = text.split('N')
-            latstr = latstr + 'N' #add north symbol back in
-        elif text.find('S') > -1:
-            #split by the south hemisphere symbol
-            latstr,lonstr = text.split('S')
-            latstr = latstr + 'S' #add south symbol back in
-        elif text == '':
-            #empty location field
-            return [0,0]
-        else:
-            #otherwise print the string and return none
-            print "Cannot parse lat/long: %s" % text
-            return [0,0]
-        lat,lng = convert_lat_lon_strings(latstr),convert_lat_lon_strings(lonstr)
-        return [lng,lat]
-    except Exception as e:
-        print "#####Error parsing lat/long: %s" % orig_text
-        print "#####ERROR: %s" % e
 
 
 
@@ -198,21 +159,21 @@ def collect_and_store_weather_data():
 
         #index WBAN station collection by coordinate (GEO2D index)
         print "Indexing coordinates..."
-        db.WBAN.ensure_index([('coordinates', GEO2D)])
+        db.WBAN.ensure_index([('loc', GEOSPHERE )])
 
 
         #get CA weather stations
         CA_stations = [station['WBAN_ID'] for station in list(db.WBAN.find({'STATE_PROVINCE':'CA'},{'WBAN_ID':1,'_id':0}))]
 
         months = range(12,0,-1)
-        years = range(2015,2012,-1)
+        years = range(2015,2010,-1)
         for year in years:
             for month in months:
                 local_start = dt.datetime.now()
                 #get hourly weather records for the California stations
                 acquire_metar_records('http://cdo.ncdc.noaa.gov/qclcd_ascii/','QCLCD%04d%02d.zip' % (year,month),CA_stations)
                 print "Finished collecting weather data for %04d%02d." % (year,month)
-                print "Total Runtime: %s " % (dt.datetime.now() - local_start)        
+                print "Total Runtime: %s " % (dt.datetime.now() - local_start)
         print "Finished!\nTotal Run Time: %s " % (dt.datetime.now() - total_start)
         print db.command("dbstats")
 
@@ -220,7 +181,7 @@ def collect_and_store_weather_data():
         print "#####ERROR: %s" % e
 
 def get_weather():
-    #for running code        
+    #for running code
     try:
         collect_and_store_weather_data()
         #clean up any existing data files
