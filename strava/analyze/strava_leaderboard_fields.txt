@@ -1,0 +1,12 @@
+segment_id
+effort_id
+WBAN
+distance
+average_watts
+rank
+moving_time
+elapsed_time
+average_hr
+athlete_gender
+neighborhood_index
+start_date_local
