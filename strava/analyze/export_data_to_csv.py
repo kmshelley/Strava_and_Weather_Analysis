@@ -96,7 +96,7 @@ def join_segment_and_weather(segment_id):
     consoleCmds = 'cat leaderboard.csv weather.csv | python mrjob_join.py  > output.txt'
     subprocess.Popen(consoleCmds)
     with open('output.txt','r') as joined:
-        with open('joined.csv','w') as csvfile:
+        with open('leaderboards_weather_7308448.csv','w') as csvfile:
             csvfile.writelines([ast.literal_eval(line.split('\t')[1]) for line in joined.readlines()])
             
     
@@ -134,7 +134,7 @@ def segment_and_weather_to_csv():
         
         #convert joined MR output to csv
         with open('output.txt','r') as joined:
-            with open('joined.csv','w') as csvfile:
+            with open('leaderboards_weather_7308448.csv','w') as csvfile:
                 csvfile.write(','.join(weather_header)+','+','.join(leaderboard_header)+',Segment Direction,\n')
                 csvfile.writelines([ast.literal_eval(line.split('\t')[1])+','+str(direction)+',\n' for line in joined.readlines()])
     except Exception as e:
