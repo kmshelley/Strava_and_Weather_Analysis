@@ -42,6 +42,9 @@ def query_segments(cursor, msg):
 query_segments(segments_collection.find().sort("athlete_count", -1).limit(10),
                "@@@ Top 10 segments by Athlete Count @@@")
 
+query_segments(segments_collection.find().sort("effort_count", -1).limit(10),
+               "@@@ Top 10 segments by Effort Count @@@")
+
 query_segments(segments_collection.find().sort("star_count", -1).limit(10),
                "@@@ Top 10 segments by Star Count @@@")
 
