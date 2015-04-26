@@ -144,7 +144,7 @@ def random_segments_and_weather_to_csv():
                     merged_doc.update(leader)
                     #merged_doc = leader.copy()
                     if weather_obs: merged_doc.update(weather_obs)
-                    merged_doc['Segement Direction'] = direction
+                    merged_doc['Segment Direction'] = direction
                     writer.writerow(merged_doc)
     except Exception as e:
         if merged_doc: pprint.pprint(merged_doc)
