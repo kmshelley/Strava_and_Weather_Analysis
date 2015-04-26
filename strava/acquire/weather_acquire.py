@@ -69,6 +69,7 @@ def acquire_metar_records(url,filename,id_list=None):
                             #or if we are searching all stations (id_list not specified)
                             _id = wban+'_'+date+'_'+time #custom mongodb id
                             row['_id'] = _id
+                            row['search_idx'] = _id[:-2]
                             bulk.insert(row)
                             bulk_count+=1
                         if bulk_count == batch_size:
@@ -147,6 +148,35 @@ def acquire_WBAN_definitions(url):
 
 
 
+def update_hourly_records_with_new_index():
+    bulk = db.hourly_records.initialize_unordered_bulk_op()
+    bulk_count = 0 #for chunking bulk operations
+    for doc in db.hourly_records.find():
+        bulk.find({'_id': doc['_id']}).update({'$set': {'search_idx':doc['_id'][:-2]}})
+        bulk_count+=1
+        if bulk_count == batch_size:
+            #perform up to 'batch_size' inserts at a time
+            try:
+                #perform a final bulk insert
+                result = bulk.execute()
+                pprint.pprint(result)
+            except BulkWriteError as bwe:
+                pprint.pprint(bwe.details)
+            except Exception as e:
+                print "#####ERROR: %s" % e
+            bulk_count=0
+            bulk = None
+            bulk = db.hourly_records.initialize_unordered_bulk_op()#reset the bulk op
+    try:
+        #perform a final bulk insert
+        result = bulk.execute()
+        pprint.pprint(result)
+        db.hourly_records.ensure_index([('search_idx', 1)])
+    except BulkWriteError as bwe:
+        pprint.pprint(bwe.details)
+    except Exception as e:
+        print "#####ERROR: %s" % e
+
 
 #http://cdo.ncdc.noaa.gov/qclcd_ascii/199607.tar.gz <- filename format before 7/2007
 def collect_and_store_weather_data():
@@ -183,9 +213,10 @@ def collect_and_store_weather_data():
 def get_weather():
     #for running code
     try:
-        collect_and_store_weather_data()
+        #collect_and_store_weather_data()
         #clean up any existing data files
-        clean_up_files()
+        #clean_up_files()
+        update_hourly_records_with_new_index()
     except KeyboardInterrupt,SystemExit:
         print "Interrupted, closing..."
         #clean up existing data files before quitting
