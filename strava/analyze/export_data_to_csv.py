@@ -19,8 +19,7 @@ import os
 import sys
 import random
 import pymongo
-sys.path.append('C:\\Users\\Katherine\\Documents\\GitHub\\W205_Final_Project\\strava')
-from util.config import Config
+rom util.config import Config
 from util import log
 import subprocess
 from util import lat_lng
@@ -43,9 +42,13 @@ wban_date_format = cfg.get("weather","date_format")
 strava_datetime_format = cfg.get("strava","date_time_format")
 
 #data fields to export
-segment_fields = os.path.join(os.getcwd(),'strava_segment_fields.txt')
-leaderboard_fields = os.path.join(os.getcwd(),'strava_leaderboard_fields.txt')
-weather_fields = os.path.join(os.getcwd(),'hourly_record_fields.txt')
+segment_header = cfg.get("mapreduce","segment_fields").split(',')
+leaderboard_header = cfg.get("mapreduce","leaderboard_fields").split(',')
+weather_header = cfg.get("mapreduce","weather_fields").split(',')
+
+#output files
+leader_out='leaderboards.csv'
+weather_out='weather.csv'
 
 def decode_dict(D):
     decode = {}
@@ -56,64 +59,71 @@ def decode_dict(D):
             decode[key] = D[key]
     return decode
 
-def join_segment_and_weather(segment_id):
-    leader_out = os.path.join(os.getcwd(),'leaderboard.csv')
-    weather_out = os.path.join(os.getcwd(),'weather.csv')
-    MongoBin = 'C:\\MongoDB\\bin'
-    MongoHost = cfg.get("mongo", "uri")[10:-1]
-
-    with open(leaderboard_fields,'r') as f:
-        leaderboard_header = [line.rstrip() for line in f.readlines()]
-    with open(weather_fields,'r') as f:
-        weather_header = [line.rstrip() for line in f.readlines()]
-
-    wban = leaderboard_collection.find_one({'segment_id':segment_id})['WBAN']
-
-##    exportCmd1 = '%s\\mongoexport --host %s --db %s --collection %s --csv --fieldFile %s --query "{segment_id:%s}" --out %s'\
-##                % (MongoBin,MongoHost,cfg.get("mongo", "db_strava"),cfg.get("mongo", "coll_leaderboards"),leaderboard_fields,segment['id'],leader_out)
-##    exportCmd2 = '%s\\mongoexport --host %s --db %s --collection %s --csv --fieldFile %s --query "{WBAN:\'%s\'}" --out %s'\
-##                % (MongoBin,MongoHost,cfg.get("mongo", "db_strava"),cfg.get("mongo", "coll_weather"),weather_fields,wban,weather_out)
-##
-##    print exportCmd1
-##    print exportCmd2
-##
-##    subprocess.Popen(exportCmd1)
-##    subprocess.Popen(exportCmd2)
+def concatenate_files(file1,file2,output):
+    with open(output,'w') as out:
+        with open(file1,'r') as f:
+            for line in f: out.write(line + '\n')
+        with open(file2,'r') as f:
+            for line in f: out.write(line + '\n')
+    return output
 
 
-
-
+def export_segment(query={}):
     #leaderboard_header = leaderboard_collection.find_one().keys()
-    with open('leaderboard.csv','w') as csvfile:
+    with open(leader_out,'w') as csvfile:
         writer = csv.DictWriter(csvfile,fieldnames=leaderboard_header,extrasaction='ignore')
-        for doc in leaderboard_collection.find({'segment_id':segment_id}):
+        for doc in leaderboard_collection.find(query):
             try:
                 writer.writerow(decode_dict(doc))
             except Exception as e:
                 print "###ERROR: %s" % e
+    return leader_out
 
-    with open('weather.csv','w') as csvfile:
+def export_weather(query={}):
+    with open(weather_out,'w') as csvfile:
         writer = csv.DictWriter(csvfile,fieldnames=weather_header,extrasaction='ignore')
-        for doc in weather_collection.find({'WBAN':wban}):
+        for doc in weather_collection.find(query):
             try:
                 writer.writerow(decode_dict(doc))
             except Exception as e:
                 print "###ERROR: %s" % e
+    return weather_out
 
-    consoleCmds = 'cat leaderboard.csv weather.csv | python mrjob_join.py  > output.txt'
-    subprocess.Popen(consoleCmds)
-    with open('output.txt','r') as joined:
-        with open('joined.csv','w') as csvfile:
-            csvfile.writelines([ast.literal_eval(line.split('\t')[1]) for line in joined.readlines()])
 
-def random_segments_and_weather_to_csv():
+def join_segment_and_weather(segment_query):
+    data_out = os.path.join(os.getcwd(),'joined.csv')
+
+    wban_list = list(set([wban['WBAN'] for wban in list(leaderboard_collection.find(segment_query,{'_id':0,'WBAN':1}))])) #list of wban station ids
+    wban_query = {'WBAN':{'$in':wban_list}}
+    leaders = export_segment(segment_query)
+    weather = export_weather(wban_query)
+
+    concatenated = concatenate_files(leaders,weather,'concat.txt')
+    consoleCmds = 'python .\\analyze\\mrjob_join.py'
+    print consoleCmds
+
+    with open(concatenated,'r') as concat:
+        with open('output.txt','w') as output:
+            p = subprocess.Popen(consoleCmds, stdin=concat, stdout=output)
+    p.wait() #wait for the command to finish
+
+    with open('joined.csv','w') as csv:
+        with open('output.txt','r') as output:
+            for line in output:
+                try:
+                    csv.write(ast.literal_eval(line.split('\t')[1]) + '\n')
+                except:
+                    pass
+    os.remove('output.txt')
+    os.remove(concatenated)
+    os.remove(leaders)
+    os.remove(weather)
+    return data_out
+
+def random_segments_and_weather_to_csv(n,m):
+    #get random sample of m leaderboard entries from n segments and weather data in a CSV file
+    data_out = os.path.join(os.getcwd(),'joined.csv')
     try:
-        #get random sample of segment and weather data in a CSV file
-        #weather and leaderboard fields for writing to CSV header
-        with open(leaderboard_fields,'r') as f:
-            leaderboard_header = [line.rstrip() for line in f.readlines()]
-        with open(weather_fields,'r') as f:
-            weather_header = [line.rstrip() for line in f.readlines()]
         #csv field names
         fieldnames = weather_header+leaderboard_header+['Segement Direction']
 
@@ -121,22 +131,22 @@ def random_segments_and_weather_to_csv():
         with open('joined.csv','w') as csvfile:
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames,extrasaction='ignore')
             writer.writeheader()
-            
+
             #get 50 random segments from data set
-            random_segments = get_random_mongo_data(segments_collection,50)
+            random_segments = get_random_mongo_data(segments_collection,n)
             for segment in random_segments:
                 lat1,lng1,lat2,lng2 = segment['start_latitude'],segment['start_longitude'],segment['end_latitude'],segment['end_longitude']
                 direction = lat_lng.bearing_from_two_lat_lons(lat1,lng1,lat2,lng2)#direction of segment
-                
+
                 #get 10 random leaderboard efforts from this segment
-                random_leaders = get_random_mongo_data(leaderboard_collection,10,{'segment_id':segment['id']})
+                random_leaders = get_random_mongo_data(leaderboard_collection,m,{'segment_id':segment['id']})
                 for leader in random_leaders:
                     #pprint.pprint(leader)
                     wban = leader['WBAN']
                     strava_time = dt.datetime.strptime(leader['start_date_local'],strava_datetime_format)
                     date = dt.datetime.strftime(strava_time,wban_date_format)
                     hour = dt.datetime.strftime(strava_time,'%H')
-                    
+
                     weather_id = '%s_%s_%s' % (wban,date,hour)#alternate weather id field (indexed in Mongo)
                     weather_obs = None
                     weather_obs = weather_collection.find_one({'search_idx':weather_id})
@@ -146,6 +156,7 @@ def random_segments_and_weather_to_csv():
                     if weather_obs: merged_doc.update(weather_obs)
                     merged_doc['Segment Direction'] = direction
                     writer.writerow(merged_doc)
+        return data_out
     except Exception as e:
         if merged_doc: pprint.pprint(merged_doc)
         print "#####ERROR: %s" % e
@@ -164,14 +175,6 @@ def segment_and_weather_to_csv():
             weather_header = [line.rstrip() for line in f.readlines()]
         with open(segment_fields,'r') as f:
             segment_header = [line.rstrip() for line in f.readlines()]
-
-    ##    with open('segments.csv','w') as csvfile:
-    ##        writer = csv.DictWriter(csvfile,fieldnames=segment_header,extrasaction='ignore')
-    ##        for doc in segments_collection.find():
-    ##            try:
-    ##                writer.writerow(decode_dict(doc))
-    ##            except Exception as e:
-    ##                print "###ERROR: %s" % e
 
         #find the most popular segment
         segment = list(segments_collection.find().sort('athlete_count',direction=pymongo.DESCENDING).limit(1))[0]
