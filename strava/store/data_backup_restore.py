@@ -18,7 +18,6 @@ import sys
 import math
 import zipfile
 import subprocess
-sys.path.append('C:\\Users\\Katherine\\Documents\\GitHub\\W205_Final_Project\\strava')
 from util.config import Config
 
 config = Config()
@@ -49,7 +48,7 @@ def backup_mongo_to_s3(db_name,coll):
     print "Running mongodump..."
     subprocess.call(dump_command)
     #zip the folder
-    z = zipfile.ZipFile(out_path + '.zip','w')
+    z = zipfile.ZipFile(out_path + '.zip','w',zipfile.ZIP_DEFLATED,allowZip64=True)
     for dirname, subdirs, files in os.walk(out_path):
         for filename in files:
             z.write(os.path.join(dirname, filename),db_name + '\\' + filename)
@@ -79,7 +78,7 @@ def restore_mongo_from_s3(db_name,coll):
         if key.name == coll + '.zip':
             key.get_contents_to_filename(zip_file)
 
-    z = zipfile.ZipFile(zip_file)
+    z = zipfile.ZipFile(zip_file,allowZip64=True)
     print "Extracting files...\n"
     z.extractall(unzip_file)
     z.close()
@@ -99,13 +98,16 @@ def restore_mongo_from_s3(db_name,coll):
         print "#####ERROR: %s" % e
 
 
+def run_full_backup():
+    for coll in db.collection_names():
+        start = dt.datetime.now()
+        backup_mongo_to_s3(db.name,coll)
+        print "Done backing up %s. Runtime: %s" % (coll,(dt.datetime.now() - start))
 
-for coll in db.collection_names():
-    start = dt.datetime.now()
-    backup_mongo_to_s3(db.name,coll)
-    print "Done backing up %s. Runtime: %s" % (coll,(dt.datetime.now() - start))
-
-
-
-
+def run_full_restore():
+    collections=['WBAN','zip','segments','hourly_records','leaderboards']
+    for coll in collections:
+            start = dt.datetime.now(db.name,coll)
+            restore_mongo_from_s3()
+            print "Done backing up %s. Runtime: %s" % (coll,(dt.datetime.now() - start))
 
