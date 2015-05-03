@@ -20,9 +20,9 @@ import simplekml
 import math
 import ast
 import copy
-from util import lat_lng
-from util.config import Config
-from analyze import export_data_to_csv as export
+from ..util import lat_lng
+from ..util.config import Config
+from ..analyze import export_data_to_csv as export
 
 # MongoDB Client & DB
 cfg = Config()

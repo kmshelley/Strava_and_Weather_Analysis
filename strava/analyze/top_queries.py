@@ -39,20 +39,26 @@ def query_segments(cursor, msg):
     query_coll(cursor, segment_fields, segment_header, msg)
 
 
-query_segments(segments_collection.find().sort("athlete_count", -1).limit(10),
+def run_queries():
+    query_segments(segments_collection.find().sort("athlete_count", -1).limit(10),
                "@@@ Top 10 segments by Athlete Count @@@")
 
-query_segments(segments_collection.find().sort("effort_count", -1).limit(10),
+    query_segments(segments_collection.find().sort("effort_count", -1).limit(10),
                "@@@ Top 10 segments by Effort Count @@@")
 
-query_segments(segments_collection.find().sort("star_count", -1).limit(10),
+    query_segments(segments_collection.find().sort("star_count", -1).limit(10),
                "@@@ Top 10 segments by Star Count @@@")
 
-query_segments(segments_collection.find({"activity_type": "Run"}).sort("athlete_count", -1).limit(10),
+    query_segments(segments_collection.find({"activity_type": "Run"}).sort("athlete_count", -1).limit(10),
                "@@@ Top 10 'Run' segments @@@")
 
-query_segments(segments_collection.find({"city": "San Francisco"}).sort("athlete_count", -1).limit(10),
+    query_segments(segments_collection.find({"city": "San Francisco"}).sort("athlete_count", -1).limit(10),
                "@@@ Top 10 segments in San Francisco @@@")
+
+
+if __name__ == '__main__':
+    run_queries()
+
 
 
 
