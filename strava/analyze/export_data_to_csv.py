@@ -19,10 +19,10 @@ import os
 import sys
 import random
 import pymongo
-rom util.config import Config
-from util import log
+from ..util.config import Config
+from ..util import log
 import subprocess
-from util import lat_lng
+from ..util import lat_lng
 import re
 
 logger = log.getLogger(__name__)

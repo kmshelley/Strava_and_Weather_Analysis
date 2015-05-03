@@ -17,6 +17,8 @@ from report.google_polyline_encoder import decode
 import datetime as dt
 import analyze.export_data_to_csv as export
 import report.data_viz as data_viz
+import analyze.top_queries as top
+import analyze.dbstats as dbstats
 
 
 logger = log.getLogger(__name__)
@@ -43,8 +45,9 @@ def get_user_input():
         3. Export random sample CSV.\n \
         4. Create GoogleEarth heat maps.\n \
         5. Get top segments. \n \
+        6. Get MongoDB Stats. \n \
         (Type 'Q' to quit.)\n\n")
-    if response == '1' or response == '2' or response == '3' or response == '4' or response == '5':
+    if response == '1' or response == '2' or response == '3' or response == '4' or response == '5' or response == "6":
         return response
     elif response.lower() == 'q':
         cls()
@@ -164,8 +167,15 @@ while True:
             print "\n\nFinished writing kml files to %s" % os.getcwd()
             print "Total runtime: %s\n\n\n" % (dt.datetime.now() - start)
         if ui == '5':
-            p = subprocess.Popen('python .\\analyze\\top_queries.py')
-            p.wait()
+            start = dt.datetime.now()
+            print "Running Random Queries on Segments/Leaderboards etc... \n\n"
+            top.run_queries()
+            print "Total runtime: %s\n\n\n" % (dt.datetime.now() - start)
+        if ui == '6':
+            start = dt.datetime.now()
+            print "Fetching MongoDB DB & Collection Level Statistics... \n\n"
+            dbstats.get_mongo_stats()
+            print "Total runtime: %s\n\n\n" % (dt.datetime.now() - start)
     except Exception as e:
         interrupt(e)
 
