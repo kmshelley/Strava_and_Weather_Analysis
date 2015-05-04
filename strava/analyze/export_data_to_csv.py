@@ -125,7 +125,7 @@ def random_segments_and_weather_to_csv(n,m):
     data_out = os.path.join(os.getcwd(),'joined.csv')
     try:
         #csv field names
-        fieldnames = weather_header+leaderboard_header+['Segement Direction']
+        fieldnames = weather_header+leaderboard_header+['Segment Direction']
 
         #iterate through 50 random segments, join random sample of leaderboard data with historical weather into CSV
         with open('joined.csv','w') as csvfile:
